@@ -73,17 +73,7 @@ export class RhodoniteViewer extends LitElement {
             framebufferTargetOfGammaResolveForReference);
 
     // setup IBL
-    const prefilterObj = await setupIBL(scenario, iblRotation);
-
-    if (Rn.Is.exist(prefilterObj)) {
-      setupBackgroundEnvCubeExpression(
-          frame,
-          prefilterObj,
-          framebufferTargetOfGammaMsaa,
-          mainRenderPass,
-          scenario,
-          iblRotation);
-    }
+    await setupIBL(scenario, iblRotation, frame, mainRenderPass, framebufferTargetOfGammaMsaa);
 
     // MSAA Resolve Expression
     setupMsaaResolveExpression(
@@ -148,15 +138,12 @@ export class RhodoniteViewer extends LitElement {
   }
 }
 
-async function setupIBL(scenario: ScenarioConfig, rotation: number) {
+async function setupIBL(scenario: ScenarioConfig, rotation: number, frame: Rn.Frame, mainRenderPass: Rn.RenderPass, framebufferTargetOfGammaMsaa: Rn.FrameBuffer) {
   const split = scenario.lighting.split('.');
   const ext = split[split.length - 1];
   if (ext === 'hdr') {
-    const prefilterObj = await prefilterFromUri(scenario.lighting);
-    setupPrefilteredIBLTexture(prefilterObj, rotation);
-    return prefilterObj;
+    await prefilterFromUri(scenario.lighting, scenario, rotation, frame, mainRenderPass, framebufferTargetOfGammaMsaa);
   }
-  return undefined;
 }
 
 function setupCamera(
@@ -464,126 +451,37 @@ function setTextureParameterForMeshComponents(
     }
   }
 }
-declare const wasm_bindgen: any;
-let initPrefilteringWasmPromise: Promise<unknown>;
-let glPrefiltering: WebGLRenderingContext;
 
-function initPrefilteringWasm() {
-  return new Promise(resolve => {
-           if (initPrefilteringWasmPromise != null) {
-             // already initialized
-             initPrefilteringWasmPromise.then(() => {
-               resolve();
-             });
-           }
-
-           const uri =
-               'https://storage.googleapis.com/emadurandal-3d-public.appspot.com/rhodonite/vendor/ibl_prefiltering_wasm_bg.wasm'
-
-           initPrefilteringWasmPromise = wasm_bindgen(uri).then(() => {
-             const canvas =
-                 document.createElement('canvas') as HTMLCanvasElement
-             glPrefiltering =
-                 canvas.getContext('webgl') as WebGLRenderingContext
-             const {init_webgl_extensions} = wasm_bindgen
-             init_webgl_extensions(glPrefiltering)
-
-             resolve();
-           }) as Promise<void>
-         }) as Promise<void>;
+async function prefilterFromUri(hdrFileUri: string, scenario: ScenarioConfig, rotation: number, frame: Rn.Frame, mainRenderPass: Rn.RenderPass, framebufferTargetOfGammaMsaa: Rn.FrameBuffer) {
+  const arrayBuffer = await fetch(hdrFileUri).then(res => res.arrayBuffer());
+  const data = loadHDR(new Uint8Array(arrayBuffer));
+  await prefilterHdrAndSetIBL(data, scenario, rotation, frame, mainRenderPass, framebufferTargetOfGammaMsaa);
 }
 
-async function prefilterFromUri(hdrFileUri: string) {
-  await initPrefilteringWasm()
+// function setupPrefilteredIBLTexture(prefilter: any, rotation: number) {
+//   const specularCubeTexture = new Rn.CubeTexture()
+//   const specularTextureTypedArrayImages =
+//       getSpecularCubeTextureTypedArrays(prefilter)
+//   specularCubeTexture.mipmapLevelNumber = specularTextureTypedArrayImages.length
+//   const specularTextureSize = getSpecularCubeTextureSize(prefilter, 0)
+//   specularCubeTexture.generateTextureFromTypedArrays(
+//       specularTextureTypedArrayImages, specularTextureSize, specularTextureSize)
+//   specularCubeTexture.hdriFormat = Rn.HdriFormat.RGBE_PNG
 
-  const {request_binary, CubeMapPrefilter} = wasm_bindgen
+//   const diffuseCubeTexture = new Rn.CubeTexture()
+//   const diffuseTextureTypedArrayImages =
+//       getDiffuseCubeTextureTypedArrays(prefilter)
+//   const diffuseTextureSize = getDiffuseCubeTextureSize(prefilter)
+//   diffuseCubeTexture.generateTextureFromTypedArrays(
+//       diffuseTextureTypedArrayImages, diffuseTextureSize, diffuseTextureSize)
+//   diffuseCubeTexture.hdriFormat = Rn.HdriFormat.RGBE_PNG;
 
-  const cubeMapSize = 512
-  const irradianceCubeMapSize = 32
-  const pmremCubeMapSize = 128
-  const pmremCubeMapMipCount = 8
-  const brdfLutSize = 512
-  const sample_count = 1024;
-  const prefilter = new CubeMapPrefilter(
-      glPrefiltering,
-      cubeMapSize,
-      irradianceCubeMapSize,
-      pmremCubeMapSize,
-      pmremCubeMapMipCount,
-      brdfLutSize,
-      sample_count)
+//   attachIBLTextureToAllMeshComponents(
+//       diffuseCubeTexture, specularCubeTexture, rotation);
 
-  const hdrImageData = await request_binary(hdrFileUri)
-  prefilter.load_hdr_image(glPrefiltering, hdrImageData)
-  prefilter.process(glPrefiltering)
+//   return [diffuseCubeTexture, specularCubeTexture];
+// }
 
-  return prefilter
-}
-
-function setupPrefilteredIBLTexture(prefilter: any, rotation: number) {
-  const specularCubeTexture = new Rn.CubeTexture()
-  const specularTextureTypedArrayImages =
-      getSpecularCubeTextureTypedArrays(prefilter)
-  specularCubeTexture.mipmapLevelNumber = specularTextureTypedArrayImages.length
-  const specularTextureSize = getSpecularCubeTextureSize(prefilter, 0)
-  specularCubeTexture.generateTextureFromTypedArrays(
-      specularTextureTypedArrayImages, specularTextureSize, specularTextureSize)
-  specularCubeTexture.hdriFormat = Rn.HdriFormat.RGBE_PNG
-
-  const diffuseCubeTexture = new Rn.CubeTexture()
-  const diffuseTextureTypedArrayImages =
-      getDiffuseCubeTextureTypedArrays(prefilter)
-  const diffuseTextureSize = getDiffuseCubeTextureSize(prefilter)
-  diffuseCubeTexture.generateTextureFromTypedArrays(
-      diffuseTextureTypedArrayImages, diffuseTextureSize, diffuseTextureSize)
-  diffuseCubeTexture.hdriFormat = Rn.HdriFormat.RGBE_PNG;
-
-  attachIBLTextureToAllMeshComponents(
-      diffuseCubeTexture, specularCubeTexture, rotation);
-
-  return [diffuseCubeTexture, specularCubeTexture];
-}
-
-function getSpecularCubeTextureTypedArrays(prefilter: any) {
-  const specularTextureTypedArrays = [];
-  const mipCount = prefilter.pmrem_cubemap_mip_count();
-
-  for (let mipLevel = 0; mipLevel < mipCount; mipLevel++) {
-    specularTextureTypedArrays.push({
-      posX: prefilter.pmrem_cubemap_texture_to_arrybuffer(
-          glPrefiltering, glPrefiltering.TEXTURE_CUBE_MAP_POSITIVE_X, mipLevel),
-      negX: prefilter.pmrem_cubemap_texture_to_arrybuffer(
-          glPrefiltering, glPrefiltering.TEXTURE_CUBE_MAP_NEGATIVE_X, mipLevel),
-      posY: prefilter.pmrem_cubemap_texture_to_arrybuffer(
-          glPrefiltering, glPrefiltering.TEXTURE_CUBE_MAP_POSITIVE_Y, mipLevel),
-      negY: prefilter.pmrem_cubemap_texture_to_arrybuffer(
-          glPrefiltering, glPrefiltering.TEXTURE_CUBE_MAP_NEGATIVE_Y, mipLevel),
-      posZ: prefilter.pmrem_cubemap_texture_to_arrybuffer(
-          glPrefiltering, glPrefiltering.TEXTURE_CUBE_MAP_POSITIVE_Z, mipLevel),
-      negZ: prefilter.pmrem_cubemap_texture_to_arrybuffer(
-          glPrefiltering, glPrefiltering.TEXTURE_CUBE_MAP_NEGATIVE_Z, mipLevel)
-    });
-  }
-
-  return specularTextureTypedArrays;
-}
-
-function getDiffuseCubeTextureTypedArrays(prefilter: any) {
-  return [{
-    posX: prefilter.irradiance_cubemap_texture_to_arrybuffer(
-        glPrefiltering, glPrefiltering.TEXTURE_CUBE_MAP_POSITIVE_X),
-    negX: prefilter.irradiance_cubemap_texture_to_arrybuffer(
-        glPrefiltering, glPrefiltering.TEXTURE_CUBE_MAP_NEGATIVE_X),
-    posY: prefilter.irradiance_cubemap_texture_to_arrybuffer(
-        glPrefiltering, glPrefiltering.TEXTURE_CUBE_MAP_POSITIVE_Y),
-    negY: prefilter.irradiance_cubemap_texture_to_arrybuffer(
-        glPrefiltering, glPrefiltering.TEXTURE_CUBE_MAP_NEGATIVE_Y),
-    posZ: prefilter.irradiance_cubemap_texture_to_arrybuffer(
-        glPrefiltering, glPrefiltering.TEXTURE_CUBE_MAP_POSITIVE_Z),
-    negZ: prefilter.irradiance_cubemap_texture_to_arrybuffer(
-        glPrefiltering, glPrefiltering.TEXTURE_CUBE_MAP_NEGATIVE_Z)
-  }]
-}
 
 export function getEnvCubeTextureSize(prefilter: any) {
   return prefilter.hdr_cubemap_texture_size()
@@ -627,42 +525,26 @@ function attachIBLTextureToAllMeshComponents(
   }
 }
 
-function getEnvCubeTextureTypedArrays(prefilter: any) {
-  return [{
-    posX: prefilter.hdr_cubemap_texture_to_arrybuffer(
-        glPrefiltering, glPrefiltering.TEXTURE_CUBE_MAP_POSITIVE_X),
-    negX: prefilter.hdr_cubemap_texture_to_arrybuffer(
-        glPrefiltering, glPrefiltering.TEXTURE_CUBE_MAP_NEGATIVE_X),
-    posY: prefilter.hdr_cubemap_texture_to_arrybuffer(
-        glPrefiltering, glPrefiltering.TEXTURE_CUBE_MAP_POSITIVE_Y),
-    negY: prefilter.hdr_cubemap_texture_to_arrybuffer(
-        glPrefiltering, glPrefiltering.TEXTURE_CUBE_MAP_NEGATIVE_Y),
-    posZ: prefilter.hdr_cubemap_texture_to_arrybuffer(
-        glPrefiltering, glPrefiltering.TEXTURE_CUBE_MAP_POSITIVE_Z),
-    negZ: prefilter.hdr_cubemap_texture_to_arrybuffer(
-        glPrefiltering, glPrefiltering.TEXTURE_CUBE_MAP_NEGATIVE_Z)
-  }]
-}
 
-function setPrefilteredEnvCubeTexture(
-    cubeTexture: Rn.CubeTexture,
-    sphereMaterial: Rn.Material,
-    prefilter: unknown) {
-  const envCubeTextureTypedArrayImages = getEnvCubeTextureTypedArrays(prefilter)
-  const envCubeTextureSize = getEnvCubeTextureSize(prefilter)
+// function setPrefilteredEnvCubeTexture(
+//     cubeTexture: Rn.CubeTexture,
+//     sphereMaterial: Rn.Material,
+//     prefilter: unknown) {
+//   const envCubeTextureTypedArrayImages = getEnvCubeTextureTypedArrays(prefilter)
+//   const envCubeTextureSize = getEnvCubeTextureSize(prefilter)
 
-  cubeTexture.generateTextureFromTypedArrays(
-      envCubeTextureTypedArrayImages, envCubeTextureSize, envCubeTextureSize)
-  cubeTexture.hdriFormat = Rn.HdriFormat.RGBE_PNG
-  sphereMaterial.setParameter(
-      Rn.ShaderSemantics.EnvHdriFormat.str, Rn.HdriFormat.RGBE_PNG.index)
-}
+//   cubeTexture.generateTextureFromTypedArrays(
+//       envCubeTextureTypedArrayImages, envCubeTextureSize, envCubeTextureSize)
+//   cubeTexture.hdriFormat = Rn.HdriFormat.RGBE_PNG
+//   sphereMaterial.setParameter(
+//       Rn.ShaderSemantics.EnvHdriFormat.str, Rn.HdriFormat.RGBE_PNG.index)
+// }
 
 function setupBackgroundEnvCubeExpression(
     frame: Rn.Frame,
-    prefilter: any,
     framebufferTargetOfGammaMsaa: Rn.FrameBuffer,
     mainRenderPass: Rn.RenderPass,
+    environmentCubeTexture: Rn.CubeTexture,
     scenario: ScenarioConfig,
     rotation: number) {
   // create sphere
@@ -681,9 +563,6 @@ function setupBackgroundEnvCubeExpression(
       Rn.ShaderSemantics.InverseEnvironment.str, Rn.Scalar.fromCopyNumber(0));
 
   // environment Cube Texture
-  const environmentCubeTexture = new Rn.CubeTexture()
-  setPrefilteredEnvCubeTexture(
-      environmentCubeTexture, sphereMaterial, prefilter)
   const sampler = new Rn.Sampler({
     minFilter: Rn.TextureParameter.Linear,
     magFilter: Rn.TextureParameter.Linear,
@@ -734,4 +613,278 @@ function setupBackgroundEnvCubeExpression(
   frame.addExpression(expression);
   // frame;
   return expression
+}
+
+export async function prefilterHdrAndSetIBL(data: { width: number; height: number; dataFloat: Float32Array }, scenario: ScenarioConfig, rotation: number, frame: Rn.Frame, mainRenderPass: Rn.RenderPass, framebufferTargetOfGammaMsaa: Rn.FrameBuffer) {
+  return new Promise(async (resolve) => {
+    
+    const cubeMapSize = 512;
+
+    const hdrTexture = new Rn.Texture()
+    hdrTexture.allocate({
+      width: data.width,
+      height: data.height,
+      format: Rn.TextureFormat.RGBA32F,
+    })
+
+    const pixels = new Float32Array(data.width * data.height * 4);
+    for (let i = 0; i < data.width * data.height; i++) {
+      pixels[i * 4] = data.dataFloat[i * 3];
+      pixels[i * 4 + 1] = data.dataFloat[i * 3 + 1];
+      pixels[i * 4 + 2] = data.dataFloat[i * 3 + 2];
+      pixels[i * 4 + 3] = 1.0;
+    }
+
+    await hdrTexture.loadImageToMipLevel({
+      mipLevel: 0,
+      xOffset: 0,
+      yOffset: 0,
+      width: data.width,
+      height: data.height,
+      rowSizeByPixel: data.width,
+      data: pixels,
+      type: Rn.ComponentType.Float,
+    });
+
+    // Create material
+    const panoramaToCubeMaterial = Rn.MaterialHelper.createPanoramaToCubeMaterial();
+    panoramaToCubeMaterial.setParameter('cubeMapFaceId', 0);
+
+    // Create expression
+    const panoramaToCubeExpression = new Rn.Expression();
+
+    const [panoramaToCubeFramebuffer, panoramaToCubeRenderTargetCube] =
+      Rn.RenderableHelper.createFrameBufferCubeMap({
+        width: cubeMapSize,
+        height: cubeMapSize,
+        textureFormat: Rn.TextureFormat.RGBA32F,
+        // mipLevelCount: 1,
+      });
+
+    // Create renderPass and set hdrTexture to panoramaToCubeMaterial
+    const panoramaToCubeRenderPass = Rn.RenderPassHelper.createScreenDrawRenderPassWithBaseColorTexture(
+      panoramaToCubeMaterial,
+      hdrTexture
+    );
+
+    panoramaToCubeRenderPass.toClearColorBuffer = false;
+    panoramaToCubeRenderPass.toClearDepthBuffer = false;
+    panoramaToCubeRenderPass.isDepthTest = false;
+    panoramaToCubeRenderPass.setFramebuffer(panoramaToCubeFramebuffer);
+    panoramaToCubeExpression.addRenderPasses([panoramaToCubeRenderPass]);
+
+    const prefilterIblMaterial = Rn.MaterialHelper.createPrefilterIBLMaterial();
+    prefilterIblMaterial.setParameter('cubeMapFaceId', 0);
+
+    const prefilterIblExpression = new Rn.Expression();
+
+    const [diffuseIblFramebuffer, diffuseIblRenderTargetCube] =
+      Rn.RenderableHelper.createFrameBufferCubeMap({
+        width: cubeMapSize,
+        height: cubeMapSize,
+        textureFormat: Rn.TextureFormat.RGBA32F,
+        mipLevelCount: 1,
+      });
+    const [specularIblFramebuffer, specularIblRenderTargetCube] =
+      Rn.RenderableHelper.createFrameBufferCubeMap({
+        width: cubeMapSize,
+        height: cubeMapSize,
+        textureFormat: Rn.TextureFormat.RGBA32F,
+      });
+
+    const sampler = new Rn.Sampler({
+      magFilter: Rn.TextureParameter.Linear,
+      minFilter: Rn.TextureParameter.LinearMipmapLinear,
+      wrapS: Rn.TextureParameter.ClampToEdge,
+      wrapT: Rn.TextureParameter.ClampToEdge,
+      wrapR: Rn.TextureParameter.ClampToEdge,
+    });
+    sampler.create();
+    const prefilterIblRenderPass = Rn.RenderPassHelper.createScreenDrawRenderPassWithBaseColorTexture(
+      prefilterIblMaterial,
+      panoramaToCubeRenderTargetCube,
+      sampler
+    );
+
+    prefilterIblRenderPass.toClearColorBuffer = false;
+    prefilterIblRenderPass.toClearDepthBuffer = false;
+    prefilterIblRenderPass.isDepthTest = false;
+    prefilterIblRenderPass.setFramebuffer(diffuseIblFramebuffer);
+    prefilterIblExpression.addRenderPasses([prefilterIblRenderPass]);
+
+
+    const renderIBL = () => {
+      panoramaToCubeRenderPass.setFramebuffer(panoramaToCubeFramebuffer);
+
+      for (let i = 0; i < 6; i++) {
+        panoramaToCubeMaterial.setParameter('cubeMapFaceId', i);
+        panoramaToCubeFramebuffer.setColorAttachmentCubeAt(0, i, 0, panoramaToCubeRenderTargetCube);
+        Rn.System.process([panoramaToCubeExpression]);
+      }
+
+      panoramaToCubeRenderTargetCube.generateMipmaps();
+
+      prefilterIblRenderPass.setFramebuffer(diffuseIblFramebuffer);
+      prefilterIblMaterial.setParameter('distributionType', 0);
+
+      for (let i = 0; i < 6; i++) {
+        prefilterIblMaterial.setParameter('cubeMapFaceId', i);
+        diffuseIblFramebuffer.setColorAttachmentCubeAt(0, i, 0, diffuseIblRenderTargetCube);
+        Rn.System.process([prefilterIblExpression]);
+      }
+
+      prefilterIblRenderPass.setFramebuffer(specularIblFramebuffer);
+      prefilterIblMaterial.setParameter('distributionType', 1);
+
+      const mipLevelCount = Math.floor(Math.log2(cubeMapSize)) + 1;
+      for (let i = 0; i < mipLevelCount; i++) {
+        const roughness = i / (mipLevelCount - 1);
+        prefilterIblMaterial.setParameter('roughness', roughness);
+        for (let face = 0; face < 6; face++) {
+          prefilterIblMaterial.setParameter('cubeMapFaceId', face);
+          specularIblFramebuffer.setColorAttachmentCubeAt(0, face, i, specularIblRenderTargetCube);
+          prefilterIblRenderPass.setViewport(
+            Rn.Vector4.fromCopy4(0, 0, cubeMapSize >> i, cubeMapSize >> i)
+          );
+          Rn.System.process([prefilterIblExpression]);
+        }
+      }
+    };
+
+    setTimeout(async () => {
+      renderIBL();
+
+      attachIBLTextureToAllMeshComponents(
+        diffuseIblRenderTargetCube as unknown as Rn.CubeTexture,
+        specularIblRenderTargetCube as unknown as Rn.CubeTexture,
+        rotation
+      );
+
+      setupBackgroundEnvCubeExpression(
+        frame,
+        framebufferTargetOfGammaMsaa,
+        mainRenderPass,
+        panoramaToCubeRenderTargetCube as unknown as Rn.CubeTexture,
+        scenario,
+        rotation);
+
+      // const sphereMaterial = getRnAppModel().getSphereMaterial()
+      // const sampler2 = new Rn.Sampler({
+      //   wrapS: Rn.TextureParameter.ClampToEdge,
+      //   wrapT: Rn.TextureParameter.ClampToEdge,
+      //   minFilter: Rn.TextureParameter.Linear,
+      //   magFilter: Rn.TextureParameter.Linear
+      // })
+      // sphereMaterial.setTextureParameter(
+      //   'colorEnvTexture', panoramaToCubeRenderTargetCube, sampler2
+      // )
+
+      resolve(true);
+    }, 1000);
+  });
+}
+
+
+/**
+ * The original code is hdrpng.js by Enki https://enkimute.github.io/hdrpng.js/
+ *
+ * Refactored and simplified version.
+ */
+function rgbeToFloat(buffer: Uint8Array): Float32Array {
+  const l = buffer.byteLength >> 2;
+  const res = new Float32Array(l * 3);
+  for (var i = 0; i < l; i++) {
+    const s = Math.pow(2, buffer[i * 4 + 3] - (128 + 8));
+    res[i * 3] = buffer[i * 4] * s;
+    res[i * 3 + 1] = buffer[i * 4 + 1] * s;
+    res[i * 3 + 2] = buffer[i * 4 + 2] * s;
+  }
+  return res;
+}
+export function loadHDR(uint8Array: Uint8Array): { width: number; height: number; dataFloat: Float32Array } {
+  let header = '';
+  let pos = 0;
+  const d8 = uint8Array;
+  let format = undefined as string | undefined;
+
+  // read header.
+  while (!header.match(/\n\n[^\n]+\n/g)) header += String.fromCharCode(d8[pos++]);
+
+  // check format.
+  format = header.match(/FORMAT=(.*)$/m)![1];
+  if (format != '32-bit_rle_rgbe') {
+    throw new Error('unknown format : ' + format);
+  }
+
+  // parse resolution
+  let rez = header.split(/\n/).reverse()[1].split(' ');
+  const width = (rez[3] as any) * 1;
+  const height = (rez[1] as any) * 1;
+
+  // Create image.
+  const img = new Uint8Array(width * height * 4);
+  let ipos = 0;
+
+  let i = 0;
+
+  // Read all scanlines
+  for (let j = 0; j < height; j++) {
+    let rgbe = d8.slice(pos, (pos += 4));
+    const scanline: number[] = [];
+    if (rgbe[0] != 2 || rgbe[1] != 2 || rgbe[2] & 0x80) {
+      let len = width,
+        rs = 0;
+      pos -= 4;
+      while (len > 0) {
+        img.set(d8.slice(pos, (pos += 4)), ipos);
+        if (img[ipos] == 1 && img[ipos + 1] == 1 && img[ipos + 2] == 1) {
+          for (img[ipos + 3] << rs; i > 0; i--) {
+            img.set(img.slice(ipos - 4, ipos), ipos);
+            ipos += 4;
+            len--;
+          }
+          rs += 8;
+        } else {
+          len--;
+          ipos += 4;
+          rs = 0;
+        }
+      }
+    } else {
+      if ((rgbe[2] << 8) + rgbe[3] != width) {
+        throw new Error('HDR line mismatch ..');
+      }
+      for (i = 0; i < 4; i++) {
+        let ptr = i * width,
+          ptr_end = (i + 1) * width,
+          buf,
+          count;
+        while (ptr < ptr_end) {
+          buf = d8.slice(pos, (pos += 2));
+          if (buf[0] > 128) {
+            count = buf[0] - 128;
+            while (count-- > 0) scanline[ptr++] = buf[1];
+          } else {
+            count = buf[0] - 1;
+            scanline[ptr++] = buf[1];
+            while (count-- > 0) scanline[ptr++] = d8[pos++];
+          }
+        }
+      }
+      for (i = 0; i < width; i++) {
+        img[ipos++] = scanline[i];
+        img[ipos++] = scanline[i + width];
+        img[ipos++] = scanline[i + 2 * width];
+        img[ipos++] = scanline[i + 3 * width];
+      }
+    }
+  }
+
+  const imageFloat32Buffer = rgbeToFloat(img);
+
+  return {
+    width,
+    height,
+    dataFloat: imageFloat32Buffer,
+  };
 }
