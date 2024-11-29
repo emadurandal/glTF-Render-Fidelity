@@ -38,7 +38,7 @@
     "mkdirp": "^3.0.1",
     "pngjs": "^7.0.0",
     "puppeteer": "^23.4.0",
-    "rhodonite": "github:actnwit/RhodoniteTS#fcf26d3667c22be76469fa00a06db20e7079df59",
+    "rhodonite": "github:actnwit/RhodoniteTS#efa16c9baf2a82a92e5e21d331b950c80b98a0d8",
     "rimraf": "^6.0.1",
     "three": "^0.169.0",
     "three-gpu-pathtracer": "^0.0.23",
