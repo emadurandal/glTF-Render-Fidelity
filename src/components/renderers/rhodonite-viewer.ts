@@ -41,8 +41,8 @@ export class RhodoniteViewer extends LitElement {
     // Rhodonite Initialization
     await this.initRhodonite();
 
-    const iblRotation = Rn.MathUtil.degreeToRadian(180);
-    const envRotation = Rn.MathUtil.degreeToRadian(180);
+    const iblRotation = Rn.MathUtil.degreeToRadian(0);
+    const envRotation = Rn.MathUtil.degreeToRadian(0);
 
     // Update Size
     this[$updateSize]();
@@ -65,17 +65,7 @@ export class RhodoniteViewer extends LitElement {
             );
 
     const mainRenderPass = mainExpression.renderPasses[0];
-    const entities = mainRenderPass.entities;
-    for (const entity of entities) {
-      const mesh = entity.tryToGetMesh();
-      if (mesh != null && mesh.mesh != null) {
-        const primitiveNumber = mesh.mesh.getPrimitiveNumber();
-        for (let i = 0; i < primitiveNumber; i++) {
-          const primitive = mesh.mesh.getPrimitiveAt(i);
-          primitive.material.setParameter(Rn.ShaderSemantics.InverseEnvironment.str, Rn.Scalar.fromCopyNumber(0));
-        }
-      }
-    }
+    
     // setup IBL
     const backgroundEnvCubeExpression = await setupIBL(scenario, envRotation, mainRenderPass, forwardRenderPipeline, cameraComponent);
 
@@ -100,8 +90,9 @@ export class RhodoniteViewer extends LitElement {
         approach: Rn.ProcessApproach.DataTexture,
         canvas: this[$canvas] as HTMLCanvasElement,
       });
+      this[$isRhodoniteInitDone] = true;
+      Rn.AnimationComponent.setIsAnimating(false);
     }
-    Rn.AnimationComponent.setIsAnimating(false);
     // Rn.MeshRendererComponent.isDepthMaskTrueForTransparencies = true;
   }
 

@@ -527,7 +527,8 @@
         "stellar",
         "babylon",
         "gltf-sample-viewer",
-        "three-gpu-pathtracer"
+        "three-gpu-pathtracer",
+        "rhodonite"
       ],
       "renderSkybox": true
     },
