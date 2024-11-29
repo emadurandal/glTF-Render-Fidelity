@@ -41,8 +41,8 @@ export class RhodoniteViewer extends LitElement {
     // Rhodonite Initialization
     await this.initRhodonite();
 
-    const iblRotation = 45;
-    const envRotation = 180;
+    const iblRotation = Rn.MathUtil.degreeToRadian(180);
+    const envRotation = Rn.MathUtil.degreeToRadian(180);
 
     // Update Size
     this[$updateSize]();
@@ -65,12 +65,26 @@ export class RhodoniteViewer extends LitElement {
             );
 
     const mainRenderPass = mainExpression.renderPasses[0];
+    const entities = mainRenderPass.entities;
+    for (const entity of entities) {
+      const mesh = entity.tryToGetMesh();
+      if (mesh != null && mesh.mesh != null) {
+        const primitiveNumber = mesh.mesh.getPrimitiveNumber();
+        for (let i = 0; i < primitiveNumber; i++) {
+          const primitive = mesh.mesh.getPrimitiveAt(i);
+          primitive.material.setParameter(Rn.ShaderSemantics.InverseEnvironment.str, Rn.Scalar.fromCopyNumber(0));
+        }
+      }
+    }
     // setup IBL
     const backgroundEnvCubeExpression = await setupIBL(scenario, envRotation, mainRenderPass, forwardRenderPipeline, cameraComponent);
 
     forwardRenderPipeline.setExpressions([backgroundEnvCubeExpression as Rn.Expression, mainExpression]);
 
     forwardRenderPipeline.setIBLRotation(iblRotation);
+    forwardRenderPipeline.setDiffuseIBLContribution(1);
+    forwardRenderPipeline.setSpecularIBLContribution(1);
+    // forwardRenderPipeline.setToneMappingType(Rn.ToneMappingType.None);
 
     // setup camera
     setupCamera(mainRenderPass, scenario, cameraEntity, cameraComponent);
@@ -83,7 +97,7 @@ export class RhodoniteViewer extends LitElement {
     if (this[$isRhodoniteInitDone] === false) {
       this[$canvas] = this.shadowRoot!.querySelector('canvas');
       await Rn.System.init({
-        approach: Rn.ProcessApproach.Uniform,
+        approach: Rn.ProcessApproach.DataTexture,
         canvas: this[$canvas] as HTMLCanvasElement,
       });
     }
@@ -228,9 +242,10 @@ function setupBackgroundEnvCubeExpression(
   })
   const spherePrimitive = new Rn.Sphere()
   const sphereMaterial = Rn.MaterialHelper.createEnvConstantMaterial();
-  sphereMaterial.setParameter(Rn.ShaderSemantics.MakeOutputSrgb.str, 0);
+  sphereMaterial.setParameter(Rn.ShaderSemantics.MakeOutputSrgb.str, Rn.Scalar.fromCopyNumber(0));
+  sphereMaterial.setParameter(Rn.ShaderSemantics.EnvHdriFormat.str, Rn.HdriFormat.HDR_LINEAR.index);
   sphereMaterial.setParameter(
-      Rn.ShaderSemantics.envRotation.str, Rn.MathUtil.degreeToRadian(rotation));
+      Rn.ShaderSemantics.envRotation.str, rotation);
   sphereMaterial.setParameter(
       Rn.ShaderSemantics.InverseEnvironment.str, Rn.Scalar.fromCopyNumber(0));
 
