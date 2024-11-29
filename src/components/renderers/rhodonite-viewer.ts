@@ -41,7 +41,8 @@ export class RhodoniteViewer extends LitElement {
     // Rhodonite Initialization
     await this.initRhodonite();
 
-    const iblRotation = +180;
+    const iblRotation = 45;
+    const envRotation = 180;
 
     // Update Size
     this[$updateSize]();
@@ -65,9 +66,11 @@ export class RhodoniteViewer extends LitElement {
 
     const mainRenderPass = mainExpression.renderPasses[0];
     // setup IBL
-    const backgroundEnvCubeExpression = await setupIBL(scenario, iblRotation, mainRenderPass, forwardRenderPipeline, cameraComponent);
+    const backgroundEnvCubeExpression = await setupIBL(scenario, envRotation, mainRenderPass, forwardRenderPipeline, cameraComponent);
 
     forwardRenderPipeline.setExpressions([backgroundEnvCubeExpression as Rn.Expression, mainExpression]);
+
+    forwardRenderPipeline.setIBLRotation(iblRotation);
 
     // setup camera
     setupCamera(mainRenderPass, scenario, cameraEntity, cameraComponent);
@@ -84,6 +87,7 @@ export class RhodoniteViewer extends LitElement {
         canvas: this[$canvas] as HTMLCanvasElement,
       });
     }
+    Rn.AnimationComponent.setIsAnimating(false);
     // Rn.MeshRendererComponent.isDepthMaskTrueForTransparencies = true;
   }
 
@@ -117,11 +121,11 @@ export class RhodoniteViewer extends LitElement {
   }
 }
 
-async function setupIBL(scenario: ScenarioConfig, rotation: number, mainRenderPass: Rn.RenderPass, forwardRenderPipeline: Rn.ForwardRenderPipeline, cameraComponent: Rn.CameraComponent) {
+async function setupIBL(scenario: ScenarioConfig, envRotation: number, mainRenderPass: Rn.RenderPass, forwardRenderPipeline: Rn.ForwardRenderPipeline, cameraComponent: Rn.CameraComponent) {
   const split = scenario.lighting.split('.');
   const ext = split[split.length - 1];
   if (ext === 'hdr') {
-    return await prefilterFromUri(scenario.lighting, scenario, rotation, mainRenderPass, forwardRenderPipeline, cameraComponent);
+    return await prefilterFromUri(scenario.lighting, scenario, envRotation, mainRenderPass, forwardRenderPipeline, cameraComponent);
   }
   return undefined;
 }
@@ -202,10 +206,10 @@ async function loadGltf(
 }
 
 
-async function prefilterFromUri(hdrFileUri: string, scenario: ScenarioConfig, rotation: number, mainRenderPass: Rn.RenderPass, forwardRenderPipeline: Rn.ForwardRenderPipeline, cameraComponent: Rn.CameraComponent) {
+async function prefilterFromUri(hdrFileUri: string, scenario: ScenarioConfig, envRotation: number, mainRenderPass: Rn.RenderPass, forwardRenderPipeline: Rn.ForwardRenderPipeline, cameraComponent: Rn.CameraComponent) {
   const arrayBuffer = await fetch(hdrFileUri).then(res => res.arrayBuffer());
   const data = loadHDR(new Uint8Array(arrayBuffer));
-  return await prefilterHdrAndSetIBL(data, scenario, rotation, mainRenderPass, forwardRenderPipeline, cameraComponent);
+  return await prefilterHdrAndSetIBL(data, scenario, envRotation, mainRenderPass, forwardRenderPipeline, cameraComponent);
 }
 
 function setupBackgroundEnvCubeExpression(
@@ -281,7 +285,7 @@ function setupBackgroundEnvCubeExpression(
   return expression
 }
 
-export async function prefilterHdrAndSetIBL(data: { width: number; height: number; dataFloat: Float32Array }, scenario: ScenarioConfig, rotation: number, mainRenderPass: Rn.RenderPass, forwardRenderPipeline: Rn.ForwardRenderPipeline, cameraComponent: Rn.CameraComponent) {
+export async function prefilterHdrAndSetIBL(data: { width: number; height: number; dataFloat: Float32Array }, scenario: ScenarioConfig, envRotation: number, mainRenderPass: Rn.RenderPass, forwardRenderPipeline: Rn.ForwardRenderPipeline, cameraComponent: Rn.CameraComponent) {
   return new Promise(async (resolve) => {
     
     const cubeMapSize = 512;
@@ -430,13 +434,12 @@ export async function prefilterHdrAndSetIBL(data: { width: number; height: numbe
         diffuseIblRenderTargetCube as unknown as Rn.CubeTexture,
         specularIblRenderTargetCube as unknown as Rn.CubeTexture,
       );
-      forwardRenderPipeline.setIBLRotation(rotation);
 
       const backgroundEnvCubeExpression = setupBackgroundEnvCubeExpression(
         mainRenderPass,
         panoramaToCubeRenderTargetCube as unknown as Rn.CubeTexture,
         scenario,
-        rotation,
+        envRotation,
         cameraComponent,
       );
 
