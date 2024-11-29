@@ -65,6 +65,7 @@ export class RhodoniteViewer extends LitElement {
             );
 
     const mainRenderPass = mainExpression.renderPasses[0];
+    // cameraEntity.getCameraController().controller.setTargets(mainRenderPass.entities as Rn.ISceneGraphEntity[]);
     
     // setup IBL
     const backgroundEnvCubeExpression = await setupIBL(scenario, envRotation, mainRenderPass, forwardRenderPipeline, cameraComponent);
@@ -85,6 +86,14 @@ export class RhodoniteViewer extends LitElement {
 
   private async initRhodonite() {
     if (this[$isRhodoniteInitDone] === false) {
+      Rn.Config.maxSkeletalBoneNumber = 300
+      Rn.Config.maxCameraNumber = 20
+      Rn.Config.maxSkeletonNumber = 84;
+      Rn.Config.maxSkeletalBoneNumberForUniformMode = 200;
+      Rn.Config.maxMaterialInstanceForEachType = 400;
+      Rn.Config.dataTextureWidth = 2 ** 13
+      Rn.Config.dataTextureHeight = 2 ** 12
+      Rn.Config.maxMorphTargetNumber = 8;
       this[$canvas] = this.shadowRoot!.querySelector('canvas');
       await Rn.System.init({
         approach: Rn.ProcessApproach.DataTexture,
