@@ -26,7 +26,7 @@ ModelList.forEach(item => {
 const ModelMap2 = {};
 
 //const model_directory = await fetch("https://api.github.com/repos/KhronosGroup/glTF-Sample-Assets/contents/Models").then(res => res.json()).catch(e => {return []});
-const model_directory = await fs.promises.readdir("./glTF-Sample-Assets/Models", { withFileTypes: true });
+const model_directory = await fs.promises.readdir("./glTF-Render-Fidelity-Generator/glTF-Sample-Assets/Models", { withFileTypes: true });
 
 console.log("Dir #:", Object.keys(model_directory).length);
 
@@ -39,7 +39,7 @@ const official_engine_names = new Map([
   ["stellar",       "Dassault STELLAR"],
   ["vray" ,         "Chaos Group V-Ray"],
   ["blender-cycles","Blender Cycles"],
-  //["rhodonite","rhodonite"]
+  ["rhodonite","rhodonite"]
 ]);
 
 const keep_dict = {
@@ -85,9 +85,9 @@ await (async () => {
     }
     
     //const metadata = await fetch(`https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/refs/heads/main/${folderpath}/metadata.json`).then(res => res.json()).catch(e => null);
-    const metadata = JSON.parse(await fs.promises.readFile(`./glTF-Sample-Assets/${folderpath}/metadata.json`, 'utf-8'));
+    const metadata = JSON.parse(await fs.promises.readFile(`./glTF-Render-Fidelity-Generator/glTF-Sample-Assets/${folderpath}/metadata.json`, 'utf-8'));
     //const gltf = await fetch(`https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/refs/heads/main/${folderpath}/glTF/${name}.gltf`).then(res => res.json()).catch(e => null);
-    const gltf = JSON.parse(await fs.promises.readFile(`./glTF-Sample-Assets/${folderpath}/glTF/${name}.gltf`, 'utf-8'));
+    const gltf = JSON.parse(await fs.promises.readFile(`./glTF-Render-Fidelity-Generator/glTF-Sample-Assets/${folderpath}/glTF/${name}.gltf`, 'utf-8'));
     const glb = model && model.variants && model.variants['glTF-Binary'];
     const glb_draco = model && model.variants && Object.keys(model.variants).find(variant => variant.includes('Draco'));
     const glb_meshopt = model && model.variants && model.variants['glTF-Quantized'];
