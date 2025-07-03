@@ -1,0 +1,39 @@
+'use client'; // if using Next.js App Router
+
+import React from 'react'
+import { mat4, quat, vec3 } from "gl-matrix";
+import { registerBuiltInLoaders } from "@babylonjs/loaders/dynamic";
+
+export type BabylonViewerProps = {
+  src: string,
+  style?: React.CSSProperties
+  projection: mat4,
+  view: mat4,
+}
+
+const BabylonViewer = ({src, style, projection, view}: ModelViewerProps) => {
+    const canvasRef = React.useRef<HTMLCanvasElement>(null)
+
+    React.useEffect(() => {
+        if (!canvasRef.current) return
+
+        registerBuiltInLoaders();
+
+        const engine = new Engine(canvasRef.current, true)
+        engineRef.current = engine
+
+        const scene = new Scene(engine);
+        scene.useRightHandedSystem = true;
+    }, [projection, view]);
+
+    
+  const envMapUrl = "../env_maps/qwantani_afternoon_puresky_1k.hdr";
+  return (
+    <canvas
+        ref={canvasRef}
+        style={style}
+    />
+  );
+}
+
+export default BabylonViewer;

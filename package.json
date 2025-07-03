@@ -12,18 +12,23 @@
     "metadata": "node src/scripts/extract_model_metadata.mjs"
   },
   "dependencies": {
+    "@babylonjs/core": "^8.14.0",
+    "@babylonjs/loaders": "^8.14.0",
     "@emotion/cache": "^11.14.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
+    "@google/model-viewer": "^4.1.0",
     "@mui/icons-material": "^6.3.1",
     "@mui/material": "^6.3.1",
     "@mui/material-nextjs": "^6.3.1",
     "fuse.js": "^7.0.0",
+    "gl-matrix": "^3.4.3",
     "image-js": "^0.36.0",
     "next": "15.2.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "sharp": "^0.33.5"
+    "sharp": "^0.33.5",
+    "three": "^0.178.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
