@@ -15,6 +15,10 @@ import dynamic from 'next/dynamic';
 
 const ModelViewer = dynamic(() => import('@/components/Viewers/ModelViewer'), { ssr: false });
 const BabylonViewer = dynamic(() => import('@/components/Viewers/BabylonViewer'), { ssr: false });
+const ThreeGPUPathTracerViewer = dynamic(() => import('@/components/Viewers/ThreeGPUPathTracerViewer'), { ssr: false });
+const SampleViewer = dynamic(() => import('@/components/Viewers/SampleViewer'), { ssr: false });
+
+import { BabylonViewerRef } from '@/components/Viewers/BabylonViewer/BabylonViewerRef';
 
 class ArcballCamera {
   constructor(pivot = [0, 0, 0], distance = 20) {
@@ -130,16 +134,17 @@ class ArcballCamera {
 export type Mesh3DComparisonSliderProps = {
   imgSrc1: string,
   imgSrc2: string,
+  src: string,
   setSliderPosition: (value: number) => void,
   sliderPosition: number
 }
 
-const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, sliderPosition, setSliderPosition}: ImageComparisonSliderProps) => {
+const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, src, sliderPosition, setSliderPosition}: ImageComparisonSliderProps) => {
     const imageRef = React.useRef<HTMLImageElement>(null);
     const image2Ref = React.useRef<HTMLImageElement>(null);
     const containerRef = React.useRef<HTMLDivElement>(null);
     const containerRootRef = React.useRef<HTMLDivElement>(null);
-    const camera_arc = new ArcballCamera([0, 0, 0], 3.75);
+    const camera_arc = new ArcballCamera([0, 0, 0], 5.75);
 
     const theme = useTheme();
 
@@ -154,29 +159,30 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, sliderPosition, setSliderPosi
     
     // Perspective projection
     const fovy = Math.PI / 4;
-    const aspect = 400 / 400;
+    const aspect2 = 400 / 400;
     const near = 0.1;
     const far = 1000;
-    mat4.perspective(projection2, fovy, aspect, near, far);
+    mat4.perspective(projection2, fovy, aspect2, near, far);
 
-    //setProjection(projection2);
-    //setView(view2);
-
-    const canvasRef = React.useRef<HTMLCanvasElement>(null)
+    //const canvasRef = React.useRef<HTMLCanvasElement>(null)
+    const sliderRef = React.useRef(null);
+    const sliderDragRef = React.useRef(false);
+    const canvasRef = React.useRef<BabylonViewerRef>(null);
     const canvas2Ref = React.useRef<HTMLCanvasElement>(null)
     const engineRef = React.useRef<Engine | null>(null)
     const sceneRef = React.useRef<Scene | null>(null)
+    const [fov, setFov] = React.useState(Math.PI / 4)
+    const [aspect, setAspect] = React.useState(1)
     const [projection, setProjection] = React.useState(projection2)
     const [view, setView] = React.useState(camera_arc.getViewMatrix())
     const [error, setError] = React.useState<string | null>(null)
+    const [sliderDrag, setSliderDrag] = React.useState<boolean>(false)
 
     const modelUrl = "../models/Duck_centered.glb";
 
     const toolReisze = () => {
-      console.log("Ludacris")
       if(canvasRef.current == null || canvas2Ref.current == null
       || containerRef.current == null || containerRootRef.current == null) {
-        console.log("Ludacris")
         return;
       }
     
@@ -234,174 +240,77 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, sliderPosition, setSliderPosi
         return centerSum.scale(1 / meshes.length).asArray();
     }
 
+
+    const isInside = (e, r, m) => {
+      return e.clientX >= (r.left - m) && e.clientX <= (r.right + m) &&
+      e.clientY >= (r.top + m) && e.clientY <= (r.bottom - m);
+    };
+
     React.useEffect(() => {
-        if (!canvasRef.current) return
+      const container = canvasRef.current;
 
-        registerBuiltInLoaders();
+      /*containerRootRef.current.addEventListener('mousedown', (e) => {
+        const slider = sliderRef.current;
+        const rect = slider.getBoundingClientRect();
+        sliderDragRef.current = isInside(e, rect, 10);
+        console.log("isInside(e, rect)", isInside(e, rect, 10));
+        if (!sliderDragRef.current)
+          camera_arc.startRotation(e.clientX, e.clientY);
+      }, true);*/
 
-        const engine = new Engine(canvasRef.current, true)
-        engineRef.current = engine
+      containerRootRef.current.addEventListener('pointerdown', (e) => {
+        const slider = sliderRef.current;
+        const rect = slider.getBoundingClientRect();
+        sliderDragRef.current = isInside(e, rect, 10);
+        console.log("isInside(e, rect)", isInside(e, rect, 10));
+        if (sliderDragRef.current) return;
 
-        const scene = new Scene(engine);
-        scene.useRightHandedSystem = true;
-        AppendSceneAsync(modelUrl, scene).then(() => {
-          // This runs after the Promise is resolved
-          console.log("Done!", scene);
-          console.log("Done!", scene.useRightHandedSystem);
-          //const scene = new Scene(engine)
-          sceneRef.current = scene
-          scene.clearColor = new Color4(0.2, 0.2, 0.3, 0.5)
+        const canvas = canvasRef.current.getCanvas();
+        const [x, y] = camera_arc.getMousePositionInCanvas(e, canvas);
 
-          scene.meshes.forEach(mesh => {
-            //if (mesh.material && mesh.material.backFaceCulling !== undefined) {
-            //  mesh.material.backFaceCulling = true;
-            //}
-          });
+        camera_arc.startRotation(e.clientX, e.clientY);
+      }, true);
 
-                  // Create camera
-          /*const camera = new ArcRotateCamera(
-            'camera',
-            -Math.PI / 2,
-            Math.PI / 2.5,
-            10,
-            Vector3.Zero(),
-            scene
-          )
-          camera.attachControl(canvasRef.current, true)*/
+      containerRootRef.current.addEventListener('pointermove', (e) => {
+        if (e.buttons === 1) { // Left mouse button
+          const slider = sliderRef.current;
+          const rect = slider.getBoundingClientRect();
 
-          // Use a FreeCamera (which accepts matrix overrides)
-          const camera = new FreeCamera("camera", new Vector3(0, 0, -100), scene);
-          camera.detachControl(); // Disable Babylon user controls
-          camera.inputs.clear();
+          if (sliderDragRef.current) return;
 
-          // Initialize Babylon.js
-          const canvas = canvasRef.current;
+          const canvas = canvasRef.current.getCanvas();
+          const [x, y] = camera_arc.getMousePositionInCanvas(e, canvas);
+          camera_arc.rotate(x, y, canvas.width, canvas.height);
+          setView([...camera_arc.getViewMatrix()]);
+        }
+      }, true);
 
-          const geom_center = getGeometricCenter(scene);
-          
-          const camera_arc = new ArcballCamera([0, 0, 0], 1.75);
+      containerRootRef.current.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        camera_arc.zoom(e.deltaY * 0.01);
+        setView([...camera_arc.getViewMatrix()]);
+      }, true);
 
-          setView(camera_arc.getViewMatrix());
+      const fovy = Math.PI / 4;
+      const aspect = containerRootRef.current.clientWidth / containerRootRef.current.clientHeight;
+      const near = 0.1;
+      const far = 1000;
+      console.log("containerRootRef.current.clientWidth / containerRootRef.current.clientHeight", containerRootRef.current.clientWidth, containerRootRef.current.clientHeight);
+      mat4.perspective(projection2, fovy, aspect, near, far);
+      setProjection(projection2);
 
-          canvas.addEventListener('mousedown', (e) => {
-            //camera_arc.startRotation(e.clientX, e.clientY);
-          }, true);
-
-          canvas.addEventListener('pointerdown', (e) => {
-            const [x, y] = camera_arc.getMousePositionInCanvas(e, canvas);
-            camera_arc.startRotation(x, y);
-          }, true);
-
-          canvas.addEventListener('pointermove', (e) => {
-            if (e.buttons === 1) { // Left mouse button
-              const [x, y] = camera_arc.getMousePositionInCanvas(e, canvas);
-              camera_arc.rotate(x, y, canvas.width, canvas.height);
-              setView([...camera_arc.getViewMatrix()]);
-            }
-          }, true);
-
-          canvas.addEventListener('wheel', (e) => {
-            camera_arc.zoom(e.deltaY * 0.01);
-          }, true);
-
-  const envMapUrl = "../env_maps/qwantani_afternoon_puresky_1k.hdr";
-          const hdrTexture = new EquiRectangularCubeTexture(
-            envMapUrl,  // Must be a .hdr in a cube map format
-            scene,
-            512,  // resolution
-            false, // no mipmaps
-            true,  // generate HDR maps
-            //false, // not gamma
-            //true   // prefiltered
-          );
-
-          const perspectiveLH = (out, fovy, aspect, near, far) => {
-            const f = 1.0 / Math.tan(fovy / 2);
-            const rangeInv = 1.0 / (far - near);
-
-            out[0] = f / aspect;
-            out[1] = 0;
-            out[2] = 0;
-            out[3] = 0;
-
-            out[4] = 0;
-            out[5] = f;
-            out[6] = 0;
-            out[7] = 0;
-
-            out[8] = 0;
-            out[9] = 0;
-            out[10] = far * rangeInv;
-            out[11] = 1;
-
-            out[12] = 0;
-            out[13] = 0;
-            out[14] = -near * far * rangeInv;
-            out[15] = 0;
-
-            return out;
-          }
-
-          // Create lights
-          const hemisphericLight = new HemisphericLight('light', new Vector3(0, 1, 0), scene)
-          hemisphericLight.intensity = 0.7
-
-          const directionalLight = new DirectionalLight('dirLight', new Vector3(-1, -1, -1), scene)
-          directionalLight.intensity = 0.5
-
-
-          // Every frame: submit matrices to Babylon
-          scene.registerBeforeRender(() => {
-
-            //const viewBabylon = Matrix.FromArray(camera_arc.getViewMatrix());
-            // Convert glMatrix view matrix to Babylon's Matrix
-            const viewBabylon = Matrix.FromArray(view);
-            const projBabylon = Matrix.FromArray(projection);
-
-            //setProjection(projection);
-            //setView(camera_arc.getViewMatrix());
-
-            camera.freezeProjectionMatrix(projBabylon);      // Use our custom projection
-            camera.getViewMatrix = () => viewBabylon.clone(); // Override view matrix
-          });
-
-          // Render loop
-          engine.runRenderLoop(() => {
-            scene.render()
-          })
-
-
-
-          // Handle resize
-          const handleResize = () => {
-            engine.resize()
-          }
-          window.addEventListener('resize', handleResize)
-
-          const resizeObserver = new ResizeObserver(() => {
-            requestAnimationFrame(() => {
-              toolReisze();
-            });
-          });
-          
-          // Observe the canvas
-          //resizeObserver.observe(containerRootRef.current);
-          resizeObserver.observe(document.body);
-          // Cleanup
-          return () => {
-            window.removeEventListener('resize', handleResize)
-            engine.dispose()
-          }
-        });;
-
+      setFov(Math.PI / 4);
+      setAspect(containerRootRef.current.clientWidth / containerRootRef.current.clientHeight);
     }, [])
 
     const handleDrag = (clientX : number) => {
+      if (!sliderDragRef.current) return;
       const container = canvasRef.current;
       if (!container) return;
-  
+      const canvas = container.getCanvas();
+      
       // Get the bounds of the container
-      const rect = container.getBoundingClientRect();
+      const rect = canvas.getBoundingClientRect();
       const offsetX = clientX - rect.left; // Mouse position relative to the container
       const newSliderPosition = (offsetX / rect.width) * 100;
       
@@ -493,8 +402,8 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, sliderPosition, setSliderPosi
               //maxHeight: '70vh',
               touchAction:'none'
             }}
-            //onMouseDown={handleMouseDown}
-        //onTouchStart={handleTouchStart}
+            onMouseDown={handleMouseDown}
+            onTouchStart={handleTouchStart}
           >
             {/* Background Image */}
         {/*<canvas
@@ -513,7 +422,7 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, sliderPosition, setSliderPosi
     
         <BabylonViewer
           ref={canvasRef}
-          src={modelUrl}
+          src={src}
           projection={projection}
           view={view}
           style={{
@@ -529,11 +438,13 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, sliderPosition, setSliderPosi
         />
 
         {/* Foreground Image */}
-        <ModelViewer 
-          ref={canvas2Ref}
-          src={modelUrl}
+        
+        <ThreeGPUPathTracerViewer 
+          src={src}
           projection={projection}
           view={view}
+          fov={fov}
+          aspect={aspect}
           style={{
             width: '100%',
             height: '100%',
@@ -545,7 +456,9 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, sliderPosition, setSliderPosi
             clipPath: `inset(0 ${100 - sliderPosition}% 0 0)`, // Adjust visible area
           }}
         />
+
        <Box
+        ref={sliderRef}
         sx={{
           position: "absolute",
           top: 0,
@@ -555,7 +468,7 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, sliderPosition, setSliderPosi
           width: "3px",
           height: "100%",
           backgroundColor: "gray",
-          pointerEvents: "none", // Avoid slider intercepting mouse events
+          //pointerEvents: "none", // Avoid slider intercepting mouse events
         }}
       />
 
@@ -564,9 +477,7 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, sliderPosition, setSliderPosi
         sx={{
           position: "absolute",
           top: "50%",
-          //top: containerCurrent? `${elementTop + 0.5 * elementHeight}px` : "50%",
           left: `${sliderPosition}%`,
-          //left: containerCurrent? `${elementLeft + sliderPosition/100 * elementWidth}px` : "50%",
           transform: "translate(-50%, -50%)",
           width: "20px",
           height: "20px",
@@ -574,7 +485,7 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, sliderPosition, setSliderPosi
           borderRadius: "50%",
           border: "2px solid black",
           zIndex: 11,
-          pointerEvents: "none", // Avoid drag handle intercepting mouse events
+          //pointerEvents: "none", // Avoid drag handle intercepting mouse events
         }}
       />
            
@@ -582,20 +493,6 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, sliderPosition, setSliderPosi
           </Box>
       </Box>
     </>);
-    return 
-    /*return (<>
-      <canvas
-          ref={canvasRef}
-              style={{
-              width: '100%',
-              objectFit: "contain",
-              position: "relative",
-              top: 0,
-              //left: 0,
-            }}
-          onLoad={handleOnLoad}
-        />
-    </>);*/
   };
 
 
