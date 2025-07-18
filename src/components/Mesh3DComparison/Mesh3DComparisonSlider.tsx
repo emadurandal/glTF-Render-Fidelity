@@ -181,45 +181,37 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, src, sliderPosition, setSlide
     const modelUrl = "../models/Duck_centered.glb";
 
     const toolReisze = () => {
-      if(canvasRef.current == null || canvas2Ref.current == null
+      if(canvasRef.current == null /*|| canvas2Ref.current == null*/
       || containerRef.current == null || containerRootRef.current == null) {
         return;
       }
     
       const vhToPixels = (vh: number) => (vh * window.innerHeight) / 100;
 
-      const imageContainer = canvasRef.current;
+      const imageContainer = imageRef.current;
+      const canvasContainer = canvasRef.current.getCanvas();
 
       const maxWidth = containerRootRef.current.clientWidth ;  // Set max width
       const maxHeight = Math.max(containerRootRef.current.clientHeight, vhToPixels(70)); // Set max height
       
-      const image_width = imageContainer.clientWidth;
-      const image_height = imageContainer.clientHeight;
+      const image_width = imageContainer.naturalWidth;
+      const image_height = imageContainer.naturalHeight;
       const aspectRatio = image_height / image_width;
 
       // Calculate new dimensions while maintaining aspect ratio
       const width = containerRootRef.current.clientWidth;
       const height = containerRootRef.current.clientWidth * aspectRatio;
-
-      if(width > maxWidth)
-      {
-        //width = maxWidth;
-        //height = maxWidth / aspectRatio;
-      }
-      if(height > maxHeight)
-      {
-        //height = maxHeight;
-        //width = maxHeight * aspectRatio;
-      }
-
+      console.log("Dimensions", width, height);
+      console.log("Dimensions", imageContainer.clientWidth, imageContainer.clientHeight);
+      
       containerRef.current.style.width = width+"px";
       containerRef.current.style.height = height+"px";
 
-      canvasRef.current.style.width = width+"px";
-      canvasRef.current.style.height = height+"px";
+      canvasRef.current.getCanvas().style.width = width+"px";
+      canvasRef.current.getCanvas().style.height = height+"px";
 
-      canvas2Ref.current.style.width = width+"px";
-      canvas2Ref.current.style.height = height+"px";
+      //canvas2Ref.current.style.width = width+"px";
+      //canvas2Ref.current.style.height = height+"px";
     }
 
     const getGeometricCenter = (scene) => {
@@ -301,6 +293,15 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, src, sliderPosition, setSlide
 
       setFov(Math.PI / 4);
       setAspect(containerRootRef.current.clientWidth / containerRootRef.current.clientHeight);
+    
+      const resizeObserver = new ResizeObserver(() => {
+        requestAnimationFrame(() => {
+          toolReisze();
+        });
+      });
+      // Observe the canvas
+      //resizeObserver.observe(containerRootRef.current);
+      resizeObserver.observe(document.body);
     }, [])
 
     const handleDrag = (clientX : number) => {
@@ -369,7 +370,7 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, src, sliderPosition, setSlide
           toolReisze();
         });
       });
-      
+
       // Observe the canvas
       //resizeObserver.observe(containerRootRef.current);
       resizeObserver.observe(document.body);
@@ -406,35 +407,36 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, src, sliderPosition, setSlide
             onTouchStart={handleTouchStart}
           >
             {/* Background Image */}
-        {/*<canvas
-          ref={canvasRef}
-              style={{
-              width: '100%',
-              height: '100%',
-            backgroundColor: "white",
-              objectFit: "contain",
-              position: "absolute",
-              top: 0,
-              //left: 0,
-            }}
+        {/* Background Image */}
+        <img
+          ref={imageRef}
+          src={imgSrc2}
+          alt="Background"
+          style={{
+            width: '100%',
+            objectFit: "contain",
+            position: "absolute",
+            display: "none",
+            top: 0,
+            //left: 0,
+          }}
           onLoad={handleOnLoad}
-        />*/}
-    
+        />
+
         <BabylonViewer
           ref={canvasRef}
           src={src}
           projection={projection}
           view={view}
           style={{
-              width: '100%',
-              height: '100%',
+            width: '100%',
+            height: '100%',
             backgroundColor: "white",
-              objectFit: "contain",
-              position: "absolute",
-              top: 0,
-              //left: 0,
-            }}
-          onLoad={handleOnLoad}
+            objectFit: "contain",
+            position: "absolute",
+            top: 0,
+            //left: 0,
+          }}
         />
 
         {/* Foreground Image */}

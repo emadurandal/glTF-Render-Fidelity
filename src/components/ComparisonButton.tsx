@@ -6,14 +6,42 @@ import CollectionsIcon from '@mui/icons-material/Collections';
 import ViewStreamIcon from '@mui/icons-material/ViewStream';
 import ImageIcon from '@mui/icons-material/Image';
 import CompareIcon from '@mui/icons-material/Compare';
-
+import ThreeDRotationIcon from '@mui/icons-material/ThreeDRotation';
 
 type ComparisonButtonProps = {
     handleSelection: (selected:number) => void,
 }
 
+
+function StackedIcons() {
+  return (
+    <Box sx={{ position: 'relative', width: 20, height: 20 }}>
+      {/* Bottom Icon */}
+      <CompareIcon
+        sx={{
+          fontSize: 24,
+          color: 'primary.main',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+        }}
+      />
+      {/* Top Icon */}
+      <ThreeDRotationIcon
+        sx={{
+          fontSize: 24,
+          color: 'white',
+          position: 'absolute',
+          bottom: 0,
+          right: 0,
+        }}
+      />
+    </Box>
+  );
+}
+
 const ComparisonButton = ({handleSelection}:ComparisonButtonProps) => {
-    const options = ['SideBySide', 'Slider', 'Difference'];
+    const options = ['SideBySide', 'Slider', 'Difference', 'Slider 3D'];
 
     const [open, setOpen] = React.useState(false);
     const anchorRef = React.useRef<HTMLDivElement>(null);
@@ -64,6 +92,7 @@ const ComparisonButton = ({handleSelection}:ComparisonButtonProps) => {
             {selectedIndex==0 && <SideBySideIcon />}
             {selectedIndex==1 && <CompareIcon />}
             {selectedIndex==2 && <ImageIcon />}
+            {selectedIndex==3 && <ThreeDRotationIcon />}
             </IconButton>
         </ButtonGroup>
         <Popper
@@ -94,6 +123,8 @@ const ComparisonButton = ({handleSelection}:ComparisonButtonProps) => {
                         {index==0 && <SideBySideIcon/>}
                         {index==1 && <CompareIcon />}
                         {index==2 && <ImageIcon />}
+                        {index==3 && <ThreeDRotationIcon />}
+                        
                         &nbsp;
                         {option}
                         </MenuItem>

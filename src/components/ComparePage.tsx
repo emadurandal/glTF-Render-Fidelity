@@ -136,6 +136,9 @@ export default function ComparePage({name, label, renderViews, description, down
     setSliderPosition(value);
   };
 
+  console.log("RENDERVIEWS", renderViews);
+  const viewers_3d = ['three-gpu-pathtracer', 'babylon.js', 'three.js', 'gltf-sample-viewer'];
+  
   return (
     <>
       <Grid container direction={{xs:"column-reverse", sm:'row'}} className={styles.main} sx={{flexWrap: "nowrap"}} spacing={2}>
