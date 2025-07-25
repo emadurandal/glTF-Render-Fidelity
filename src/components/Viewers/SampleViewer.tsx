@@ -5,7 +5,7 @@ import { mat4, quat, vec3 } from "gl-matrix";
 import Script from "next/script";
 
 export type SampleViewerProps = {
-  src: string,
+  src?: string,
   style?: React.CSSProperties
   projection: mat4,
   view: mat4,

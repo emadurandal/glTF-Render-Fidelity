@@ -9,7 +9,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { WebGLPathTracer } from 'three-gpu-pathtracer';
 
 export type ThreeGPUPathTracerViewerProps = {
-  src: string,
+  src?: string,
   style?: React.CSSProperties
   projection: mat4,
   view: mat4,

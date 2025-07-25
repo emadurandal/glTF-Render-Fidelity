@@ -5,7 +5,7 @@ import { mat4, quat, vec3 } from "gl-matrix";
 import { Matrix4, Vector3 } from 'three';
 
 export type ModelViewerProps = {
-  src: string,
+  src?: string,
   style?: React.CSSProperties
   projection: mat4,
   view: mat4,

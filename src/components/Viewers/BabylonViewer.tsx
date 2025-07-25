@@ -6,13 +6,13 @@ import { registerBuiltInLoaders } from "@babylonjs/loaders/dynamic";
 import { EquiRectangularCubeTexture, NullLoadingScreen, HDRCubeTexture, Engine, Matrix, Scene, LoadSceneAsync, FreeCamera, ArcRotateCamera, Vector3, HemisphericLight, DirectionalLight, Color3, Color4, AppendSceneAsync } from '@babylonjs/core'
 
 export type BabylonViewerProps = {
-  src: string,
+  src?: string,
   style?: React.CSSProperties
   projection: mat4,
   view: mat4,
 }
 
-const BabylonViewer = React.forwardRef<BabylonViewerRef, {}>(({ src, style, projection, view }: BabylonViewerProps, ref) => {
+const BabylonViewer = React.forwardRef<BabylonViewerRef, BabylonViewerProps>(({ src, style, projection, view }: BabylonViewerProps, ref) => {
   const canvasRef = React.useRef<HTMLCanvasElement>(null)
   const engineRef = React.useRef<Engine | null>(null)
   const cameraRef = React.useRef<Camera | null>(null)
@@ -32,7 +32,7 @@ const BabylonViewer = React.forwardRef<BabylonViewerRef, {}>(({ src, style, proj
       return [0, 0, 0];
     }
 
-    let centerSum = new Vector3(0, 0, 0);
+    const centerSum = new Vector3(0, 0, 0);
 
     meshes.forEach(mesh => {
       const boundingInfo = mesh.getBoundingInfo();
@@ -181,9 +181,5 @@ export interface BabylonViewerRef {
   getCanvas: () => HTMLCanvasElement | null;
 }
 
-export interface BabylonViewerRef {
-  doSomething: () => void;
-  getCanvas: () => HTMLCanvasElement | null;
-}
-
+BabylonViewer.displayName = "BabylonViewer";
 export default BabylonViewer;

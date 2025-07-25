@@ -18,10 +18,17 @@ const BabylonViewer = dynamic(() => import('@/components/Viewers/BabylonViewer')
 const ThreeGPUPathTracerViewer = dynamic(() => import('@/components/Viewers/ThreeGPUPathTracerViewer'), { ssr: false });
 const SampleViewer = dynamic(() => import('@/components/Viewers/SampleViewer'), { ssr: false });
 
-import { BabylonViewerRef } from '@/components/Viewers/BabylonViewer/BabylonViewerRef';
+import { BabylonViewerRef } from '@/components/Viewers/BabylonViewer';
 
 class ArcballCamera {
-  constructor(pivot = [0, 0, 0], distance = 20) {
+  pivot: vec3; // <-- Declare it
+  distance: number; // also needed if you're using `distance`
+  rotationQuat: quat; // also needed if you're using `distance`
+  viewMatrix: mat4; // also needed if you're using `distance`
+  lastMouse: number[]; // also needed if you're using `distance`
+  rotationSpeed: number; // also needed if you're using `distance`
+
+  constructor(pivot: vec3 = [0, 0, 0], distance = 20) {
     this.pivot = vec3.clone(pivot);
     this.distance = distance;
     this.rotationQuat = quat.create(); // Identity rotation
@@ -29,18 +36,18 @@ class ArcballCamera {
     this.viewMatrix = mat4.create();
 
     // Mouse state
-    this.lastMouse = null;
+    this.lastMouse = [-1, -1];
 
     // Sensitivity
     this.rotationSpeed = 0.01;
   }
 
   // Call this on mouse down
-  startRotation(x, y) {
+  startRotation(x: number, y: number) {
     this.lastMouse = [x, y];
   }
 
-  getMousePositionInCanvas(event, canvas) {
+  getMousePositionInCanvas(event: MouseEvent, canvas: HTMLCanvasElement) {
     const rect = canvas.getBoundingClientRect();
 
     const x = event.clientX - rect.left;
@@ -49,7 +56,7 @@ class ArcballCamera {
     return [x, y];
   }
 
-  screenToArcball(x, y, width, height) {
+  screenToArcball(x: number, y: number, width: number, height: number) {
     let nx = (2 * x - width) / width;
     let ny = (height - 2 * y) / height;
 
@@ -70,7 +77,7 @@ class ArcballCamera {
   }
 
   // Call this on mouse move
-  rotate(x, y, width, height) {
+  rotate(x: number, y: number, width: number, height: number) {
     if (!this.lastMouse) return;
 
     /*const lastPos = this.screenToArcball(this.lastMouse[0], this.lastMouse[1], width, height);
@@ -107,12 +114,12 @@ class ArcballCamera {
   }
 
   // Set pivot dynamically
-  setPivot(pivotVec3) {
+  setPivot(pivotVec3: vec3) {
     vec3.copy(this.pivot, pivotVec3);
   }
 
   // Change zoom
-  zoom(delta) {
+  zoom(delta: number) {
     this.distance += delta;
     this.distance = Math.max(0.1, this.distance); // Prevent zero/negative distance
   }
@@ -134,12 +141,12 @@ class ArcballCamera {
 export type Mesh3DComparisonSliderProps = {
   imgSrc1: string,
   imgSrc2: string,
-  src: string,
+  src?: string,
   setSliderPosition: (value: number) => void,
   sliderPosition: number
 }
 
-const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, src, sliderPosition, setSliderPosition}: ImageComparisonSliderProps) => {
+const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, src, sliderPosition, setSliderPosition}: Mesh3DComparisonSliderProps) => {
     const imageRef = React.useRef<HTMLImageElement>(null);
     const image2Ref = React.useRef<HTMLImageElement>(null);
     const containerRef = React.useRef<HTMLDivElement>(null);
@@ -182,7 +189,8 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, src, sliderPosition, setSlide
 
     const toolReisze = () => {
       if(canvasRef.current == null /*|| canvas2Ref.current == null*/
-      || containerRef.current == null || containerRootRef.current == null) {
+        || imageRef.current == null
+        || containerRef.current == null || containerRootRef.current == null) {
         return;
       }
     
@@ -207,21 +215,24 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, src, sliderPosition, setSlide
       containerRef.current.style.width = width+"px";
       containerRef.current.style.height = height+"px";
 
-      canvasRef.current.getCanvas().style.width = width+"px";
-      canvasRef.current.getCanvas().style.height = height+"px";
+      const canvas = canvasRef.current.getCanvas();
+      if(!canvas) return;
+      
+      canvas.style.width = width+"px";
+      canvas.style.height = height+"px";
 
       //canvas2Ref.current.style.width = width+"px";
       //canvas2Ref.current.style.height = height+"px";
     }
 
-    const getGeometricCenter = (scene) => {
-        const meshes = scene.meshes.filter(mesh => mesh.isVisible && mesh.getTotalVertices() > 0);
+    const getGeometricCenter = (scene: number) => {
+        /*const meshes = scene.meshes.filter(mesh => mesh.isVisible && mesh.getTotalVertices() > 0);
 
         if (meshes.length === 0) {
             return [0, 0, 0];
         }
 
-        let centerSum = new Vector3(0, 0, 0);
+        const centerSum = new Vector3(0, 0, 0);
 
         meshes.forEach(mesh => {
             const boundingInfo = mesh.getBoundingInfo();
@@ -229,18 +240,19 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, src, sliderPosition, setSlide
             centerSum.addInPlace(boundingCenter);
         });
 
-        return centerSum.scale(1 / meshes.length).asArray();
+        return centerSum.scale(1 / meshes.length).asArray();*/
+        return 1;
     }
 
 
-    const isInside = (e, r, m) => {
+    const isInside = (e:MouseEvent, r:DOMRect, m:number ) => {
       return e.clientX >= (r.left - m) && e.clientX <= (r.right + m) &&
       e.clientY >= (r.top + m) && e.clientY <= (r.bottom - m);
     };
 
     React.useEffect(() => {
       const container = canvasRef.current;
-
+      if (containerRootRef.current === null) return;
       /*containerRootRef.current.addEventListener('mousedown', (e) => {
         const slider = sliderRef.current;
         const rect = slider.getBoundingClientRect();
@@ -251,6 +263,7 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, src, sliderPosition, setSlide
       }, true);*/
 
       containerRootRef.current.addEventListener('pointerdown', (e) => {
+      if (sliderRef.current === null) return;
         const slider = sliderRef.current;
         const rect = slider.getBoundingClientRect();
         sliderDragRef.current = isInside(e, rect, 10);
@@ -330,7 +343,7 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, src, sliderPosition, setSlide
       let dx = (x - cx) / radius;
       let dy = (cy - y) / radius; // Invert Y for screen-space
 
-      let length = dx * dx + dy * dy;
+      const length = dx * dx + dy * dy;
       let dz = 0;
       if (length <= 1.0) {
         dz = Math.sqrt(1.0 - length);
