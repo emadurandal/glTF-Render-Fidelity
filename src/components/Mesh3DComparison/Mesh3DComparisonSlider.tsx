@@ -141,12 +141,14 @@ class ArcballCamera {
 export type Mesh3DComparisonSliderProps = {
   imgSrc1: string,
   imgSrc2: string,
+  rtEngine1: string,
+  rtEngine2: string,
   src?: string,
   setSliderPosition: (value: number) => void,
   sliderPosition: number
 }
 
-const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, src, sliderPosition, setSliderPosition}: Mesh3DComparisonSliderProps) => {
+const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, rtEngine1, rtEngine2, src, sliderPosition, setSliderPosition}: Mesh3DComparisonSliderProps) => {
     const imageRef = React.useRef<HTMLImageElement>(null);
     const image2Ref = React.useRef<HTMLImageElement>(null);
     const containerRef = React.useRef<HTMLDivElement>(null);
@@ -454,7 +456,7 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, src, sliderPosition, setSlide
 
         {/* Foreground Image */}
         
-        <ThreeGPUPathTracerViewer 
+        {rtEngine1==="three-gpu-pathtracer" && <ThreeGPUPathTracerViewer 
           src={src}
           projection={projection}
           view={view}
@@ -470,8 +472,25 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, src, sliderPosition, setSlide
             backgroundColor: "white",
             clipPath: `inset(0 ${100 - sliderPosition}% 0 0)`, // Adjust visible area
           }}
-        />
+        />}
 
+        {rtEngine1==="gltf-sample-viewer" && <SampleViewer 
+          src={src}
+          projection={projection}
+          view={view}
+          fov={fov}
+          aspect={aspect}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: "contain",
+            position: "absolute",
+            top: 0,
+            //left: 0,
+            backgroundColor: "white",
+            clipPath: `inset(0 ${100 - sliderPosition}% 0 0)`, // Adjust visible area
+          }}
+        />}
        <Box
         ref={sliderRef}
         sx={{

@@ -43,6 +43,8 @@ export default function ComparePage({name, label, renderViews, description, down
   const [isMagnified, setMagnified] = React.useState(false);
   const [engine1, setEngine1] = React.useState('three.js');
   const [engine2, setEngine2] = React.useState('filament.js');
+  const [rtEngine1, setRtEngine1] = React.useState('gltf-sample-viewer');
+  const [rtEngine2, setRtEngine2] = React.useState('babylon.js');
   const [nextEngine, setNextEngine] = React.useState(0);
   const [comparisonMode, setComparisonMode] = React.useState(3);
   const [shareSnackbarOpen, setShareSnackbarOpen] = React.useState(false);
@@ -136,8 +138,7 @@ export default function ComparePage({name, label, renderViews, description, down
     setSliderPosition(value);
   };
 
-  console.log("RENDERVIEWS", renderViews);
-  const viewers_3d = ['three-gpu-pathtracer', 'babylon.js', 'three.js', 'gltf-sample-viewer'];
+  const viewers_3d = [{name: 'three-gpu-pathtracer'}, {name: 'babylon.js'}, {name: 'three.js'}, {name: 'gltf-sample-viewer'}];
   
   return (
     <>
@@ -169,14 +170,18 @@ export default function ComparePage({name, label, renderViews, description, down
           {comparisonMode===0 && <SideBySideComparison imgSrc1={image1} imgSrc2={image2}/>}
           {comparisonMode===1 && <ImageComparisonSlider key={isMagnified.toString()} imgSrc1={image1} imgSrc2={image2} setSliderPosition={changePosition} sliderPosition={sliderPosition}/>}
           {comparisonMode===2 && <ImageDifferenceView key={isMagnified.toString()} imgSrc1={image1} imgSrc2={image2}/>}
-          {comparisonMode===3 && <Mesh3DComparisonSlider key={isMagnified.toString()} imgSrc1={image1} imgSrc2={image2} src={downloadUrl} setSliderPosition={changePosition} sliderPosition={sliderPosition}/>}
-          <Box display={{xs: 'flex', sm:'none'}} justifyContent='space-between' width='100%' pl={1} pr={1}>
+          {comparisonMode===3 && <Mesh3DComparisonSlider key={isMagnified.toString()} rtEngine1={rtEngine1} rtEngine2={rtEngine2} imgSrc1={image1} imgSrc2={image2} src={downloadUrl} setSliderPosition={changePosition} sliderPosition={sliderPosition}/>}
+          {comparisonMode!==3 && <><Box display={{xs: 'flex', sm:'none'}} justifyContent='space-between' width='100%' pl={1} pr={1}>
             <Box flex={1}><EngineSelection engineName={engine1} engineList={renderViews.map(e=> e.name)} handleChange={(name) => { if(name!==engine1 && name!==engine2) {setEngine1(name)} }}/></Box>
             <Box flex={1} display='flex' justifyContent='flex-end'><EngineSelection engineName={engine2} engineList={renderViews.map(e=> e.name)} handleChange={(name) => { if(name!==engine1 && name!==engine2) {setEngine2(name)} }}/></Box>
           </Box>
           <Box display={{xs: 'none', sm:'flex'}} justifyContent='space-between' width='100%' pl={1} pr={1}>
             <Box flex={1}><Typography>{engine1}</Typography></Box>
             <Box flex={1} display='flex' justifyContent='flex-end'><Typography>{engine2}</Typography></Box>
+          </Box></>}
+          <Box display='flex' justifyContent='space-between' width='100%' pl={1} pr={1}>
+            <Box flex={1}><EngineSelection engineName={rtEngine1} engineList={viewers_3d.map(e=> e.name)} handleChange={(name) => { if(name!==rtEngine1 && name!==rtEngine2) {setRtEngine1(name)} }}/></Box>
+            <Box flex={1} display='flex' justifyContent='flex-end'><EngineSelection engineName={rtEngine2} engineList={viewers_3d.map(e=> e.name)} handleChange={(name) => { if(name!==rtEngine1 && name!==rtEngine2) {setRtEngine2(name)} }}/></Box>
           </Box>
         </Box>
         {!isMagnified && <Grid className={styles.side} display={{xs:'none', sm:'flex'}} sx={{overflow: "auto"}} height={"70vh"} container spacing={2}>
