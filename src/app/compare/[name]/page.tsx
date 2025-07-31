@@ -20,11 +20,18 @@ type Props = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }
 
+type Variant = {
+  variants: {
+    [key: string]: string;
+  };
+};
+
 type ModelData = {
   label: string
   description: string
   downloadModel?: string
   images: RenderView[]
+  variants: { [key: string]: string; }
 }
 
 export async function generateMetadata( { params, searchParams }: Props, parent: ResolvingMetadata
@@ -34,7 +41,7 @@ export async function generateMetadata( { params, searchParams }: Props, parent:
  
   // fetch data
   const model = (models as Record<string, ModelData>)[name];
- 
+   
   // optionally access and extend (rather than replace) parent metadata
   const previousImages = (await parent).openGraph?.images || []
  
@@ -67,8 +74,11 @@ export default async function Page({params}: { params: Promise<{ name: string }>
   const { name } = await params;
 
   const model = (models as Record<string, ModelData>)[name];
+  console.log(model);
+  console.log(typeof model.variants);
+  console.log(model.variants);
 
   const render_views = model.images;
   
-  return <ComparePage name={name} label={model.label} description={model.description} renderViews={render_views} downloadUrl={model.downloadModel}/>
+  return <ComparePage name={name} label={model.label} variants={model.variants} description={model.description} renderViews={render_views} downloadUrl={model.downloadModel}/>
 }

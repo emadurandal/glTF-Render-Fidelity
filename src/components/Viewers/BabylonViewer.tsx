@@ -3,27 +3,46 @@
 import React from 'react'
 import { mat4, quat, vec3 } from "gl-matrix";
 import { registerBuiltInLoaders } from "@babylonjs/loaders/dynamic";
-import { EquiRectangularCubeTexture, NullLoadingScreen, HDRCubeTexture, Engine, Matrix, Scene, LoadSceneAsync, FreeCamera, ArcRotateCamera, Vector3, HemisphericLight, DirectionalLight, Color3, Color4, AppendSceneAsync } from '@babylonjs/core'
+import { EquiRectangularCubeTexture, Logger, BaseTexture, PBRMaterial, CubeTexture, NullLoadingScreen, HDRCubeTexture, Engine, Matrix, Scene, Camera, LoadSceneAsync, FreeCamera, ArcRotateCamera, Vector3, HemisphericLight, DirectionalLight, Color3, Color4, AppendSceneAsync, Nullable } from '@babylonjs/core'
+import { ViewerRef, BoundingBox } from '@/components/Viewers/ViewerRef';
 
 export type BabylonViewerProps = {
   src?: string,
   style?: React.CSSProperties
   projection: mat4,
   view: mat4,
+  fov: number,
+  aspect: number,
+  setBBox: (range: BoundingBox) => void,
+  finishedLoading: () => void,
 }
 
-const BabylonViewer = React.forwardRef<BabylonViewerRef, BabylonViewerProps>(({ src, style, projection, view }: BabylonViewerProps, ref) => {
+const BabylonViewer = React.forwardRef<ViewerRef, BabylonViewerProps>(({ src, style, projection, view, aspect, fov, setBBox, finishedLoading }: BabylonViewerProps, ref) => {
   const canvasRef = React.useRef<HTMLCanvasElement>(null)
   const engineRef = React.useRef<Engine | null>(null)
   const cameraRef = React.useRef<Camera | null>(null)
   const sceneRef = React.useRef<Scene | null>(null)
 
-  React.useImperativeHandle(ref, () => ({
-    doSomething: () => {
-      console.log("Doing something inside BabylonViewer");
-    },
-    getCanvas: () => canvasRef.current,
-  }));
+  const getSceneBoundingBox = (scene) => {
+    let min = new Vector3(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY);
+    let max = new Vector3(Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY);
+
+    scene.meshes.forEach(mesh => {
+      if (!mesh.getBoundingInfo()) return;
+
+      mesh.computeWorldMatrix(true); // Ensure world matrix is up to date
+      const boundingInfo = mesh.getBoundingInfo();
+      const boundingBox = boundingInfo.boundingBox;
+
+      const minBox = boundingBox.minimumWorld;
+      const maxBox = boundingBox.maximumWorld;
+
+      min = Vector3.Minimize(min, minBox);
+      max = Vector3.Maximize(max, maxBox);
+    });
+
+    return { min, max };
+  }
 
   const getGeometricCenter = (scene) => {
     const meshes = scene.meshes.filter(mesh => mesh.isVisible && mesh.getTotalVertices() > 0);
@@ -48,7 +67,12 @@ const BabylonViewer = React.forwardRef<BabylonViewerRef, BabylonViewerProps>(({ 
 
     registerBuiltInLoaders();
 
-    const engine = new Engine(canvasRef.current, true)
+    Logger.LogLevels = Logger.None;
+
+    const engine = new Engine(canvasRef.current, false)
+    engine.canvasTabIndex = -1;
+    canvasRef.current.style.userSelect = "none";
+    canvasRef.current.style.outline = "none";
     engine.loadingScreen = {
       displayLoadingUI: function () {
           // Custom empty screen
@@ -63,15 +87,11 @@ const BabylonViewer = React.forwardRef<BabylonViewerRef, BabylonViewerProps>(({ 
     const scene = new Scene(engine);
     scene.useRightHandedSystem = true;
 
-    AppendSceneAsync(src, scene).then(() => {
-      //scene.showloa
-      // This runs after the Promise is resolved
-      //const scene = new Scene(engine)
+    AppendSceneAsync(src, scene).then(async () => {
       sceneRef.current = scene
-      scene.clearColor = new Color4(0.2, 0.2, 0.3, 0.5)
 
       // Use a FreeCamera (which accepts matrix overrides)
-      const camera = new FreeCamera("camera", new Vector3(0, 0, -100), scene);
+      const camera = new FreeCamera("camera", new Vector3(0, 0, -5), scene);
       camera.detachControl(); // Disable Babylon user controls
       camera.inputs.clear();
       cameraRef.current = camera;
@@ -80,28 +100,31 @@ const BabylonViewer = React.forwardRef<BabylonViewerRef, BabylonViewerProps>(({ 
       const canvas = canvasRef.current;
 
       const geom_center = getGeometricCenter(scene);
+      const luda = getSceneBoundingBox(scene);
+      let minmax = scene.getWorldExtends();
 
-      const envMapUrl = "../env_maps/qwantani_afternoon_puresky_1k.hdr";
-      const hdrTexture = new EquiRectangularCubeTexture(
-        envMapUrl,  // Must be a .hdr in a cube map format
-        scene,
-        512,  // resolution
-        false, // no mipmaps
-        true,  // generate HDR maps
-        //false, // not gamma
-        //true   // prefiltered
-      );
+      scene.meshes.forEach(mesh => {
+        const mat = mesh.material;
+        if (mat && mat instanceof PBRMaterial) {
+          //mat.environmentTexture = null; // Force it to use scene.environmentTexture
+          //mat.reflectionTexture = null; // Force it to use scene.environmentTexture
+        }
+      });
+
+      // Optional: adjust exposure and contrast
+      scene.imageProcessingConfiguration.exposure = 1.5;
+      scene.imageProcessingConfiguration.contrast = 1.2;
 
       // Create lights
-      const hemisphericLight = new HemisphericLight('light', new Vector3(0, 1, 0), scene)
-      hemisphericLight.intensity = 0.7
+      //const hemisphericLight = new HemisphericLight('light', new Vector3(0, 1, 0), scene)
+      //hemisphericLight.intensity = 0.7
 
-      const directionalLight = new DirectionalLight('dirLight', new Vector3(-1, -1, -1), scene)
-      directionalLight.intensity = 0.5
+      //const directionalLight = new DirectionalLight('dirLight', new Vector3(-1, -1, -1), scene)
+      //directionalLight.intensity = 0.5
 
       // Every frame: submit matrices to Babylon
       scene.registerBeforeRender(() => {
-
+          
         //const viewBabylon = Matrix.FromArray(camera_arc.getViewMatrix());
         // Convert glMatrix view matrix to Babylon's Matrix
         const viewBabylon = Matrix.FromArray(view);
@@ -109,9 +132,25 @@ const BabylonViewer = React.forwardRef<BabylonViewerRef, BabylonViewerProps>(({ 
 
         //setProjection(projection);
         //setView(camera_arc.getViewMatrix());
+        const extractPositionFromViewMatrix = (view: Matrix): Vector3 => {
+            // Inverse view matrix gives the camera world matrix
+            const inv = new Matrix();
+            view.invertToRef(inv);
+            return Vector3.TransformCoordinates(Vector3.Zero(), inv);
+        }
 
         camera.freezeProjectionMatrix(projBabylon);      // Use our custom projection
-        camera.getViewMatrix = () => viewBabylon.clone(); // Override view matrix
+        camera.getViewMatrix = () => {
+          viewBabylon.clone();
+          camera._computedViewMatrix = viewBabylon.clone();
+          //camera._computedViewMatrix.invertToRef(camera._worldMatrix);
+          return viewBabylon.clone();
+        } // Override view matrix
+        camera.getTransformationMatrix=  () => viewBabylon.clone()
+        camera._position = extractPositionFromViewMatrix(viewBabylon);
+        camera._globalPosition = extractPositionFromViewMatrix(viewBabylon);
+        //camera._refreshFrustumPlanes();
+        //scene.setTransformMatrix(viewBabylon, projBabylon)
       });
 
       // Render loop
@@ -120,7 +159,8 @@ const BabylonViewer = React.forwardRef<BabylonViewerRef, BabylonViewerProps>(({ 
       })
 
       // Handle resize
-      const handleResize = () => {
+      /*const handleResize = () => {
+        const canvas = canvasRef.current;
         engine.resize()
       }
       window.addEventListener('resize', handleResize)
@@ -129,14 +169,35 @@ const BabylonViewer = React.forwardRef<BabylonViewerRef, BabylonViewerProps>(({ 
         requestAnimationFrame(() => {
           engine.resize()
         });
-      });
+      });*/
+
+      const envMapUrl = "../env_maps/chinese_garden_1k.hdr";
+      const loadHDRAsync = async (url: any, scene: Scene): Promise<Nullable<BaseTexture>> => {
+        return new Promise((resolve) => {
+          const hdr = new HDRCubeTexture(url, scene, 512, false, true, false, true);
+          hdr.onLoadObservable.addOnce(() => resolve(hdr));
+        });
+      }
+
+      const reflectionTexture = await loadHDRAsync(envMapUrl, scene);
+
+      // Apply as environment and background
+      scene.environmentTexture = reflectionTexture;
+      const envMapRotationY = Math.PI / 2;
+      scene.environmentTexture.setReflectionTextureMatrix(Matrix.RotationY(envMapRotationY));
+      const skybox = scene.createDefaultSkybox(reflectionTexture, true, 1000);
+      // Rotate the skybox texture
+      if (skybox && skybox.material && skybox.material.reflectionTexture) {
+        skybox.material.reflectionTexture.rotationY = envMapRotationY; // Rotate 90 degrees
+      }
 
       // Observe the canvas
       //resizeObserver.observe(containerRootRef.current);
-      resizeObserver.observe(document.body);
+      //resizeObserver.observe(document.body);
+      finishedLoading();
       // Cleanup
       return () => {
-        window.removeEventListener('resize', handleResize)
+        //window.removeEventListener('resize', handleResize)
         engine.dispose()
       }
     });
@@ -160,11 +221,37 @@ const BabylonViewer = React.forwardRef<BabylonViewerRef, BabylonViewerProps>(({ 
 
       //setProjection(projection);
       //setView(camera_arc.getViewMatrix());
+      const extractPositionFromViewMatrix = (view: Matrix): Vector3 => {
+          // Inverse view matrix gives the camera world matrix
+          const inv = new Matrix();
+          view.invertToRef(inv);
+          return Vector3.TransformCoordinates(Vector3.Zero(), inv);
+      }
 
       camera.freezeProjectionMatrix(projBabylon);      // Use our custom projection
-      camera.getViewMatrix = () => viewBabylon.clone(); // Override view matrix
+      camera.getViewMatrix = () => {
+        viewBabylon.clone();
+        camera._computedViewMatrix = viewBabylon.clone();
+        //camera._computedViewMatrix.invertToRef(camera._worldMatrix);
+        return viewBabylon.clone();
+      } // Override view matrix
+      camera.getTransformationMatrix=  () => viewBabylon.clone()
+      camera._position = extractPositionFromViewMatrix(viewBabylon);
+      camera._globalPosition = extractPositionFromViewMatrix(viewBabylon);
+      //camera._refreshFrustumPlanes();
+      //scene.setTransformMatrix(viewBabylon, projBabylon)
     });
-  }, [projection, view]);
+  }, [projection, view, aspect, fov]);
+
+  React.useImperativeHandle(ref, () => ({
+    getCanvas: () => canvasRef.current,
+    resize: (width: number, height: number) => {
+      const canvas = canvasRef.current;
+      const engine = engineRef.current;
+      if (!canvas || !engine) return;
+      engine.resize();
+    },
+  }));
 
   const envMapUrl = "../env_maps/qwantani_afternoon_puresky_1k.hdr";
   return (
@@ -175,11 +262,6 @@ const BabylonViewer = React.forwardRef<BabylonViewerRef, BabylonViewerProps>(({ 
   );
 });
 
-// types/BabylonViewerRef.ts
-export interface BabylonViewerRef {
-  doSomething: () => void;
-  getCanvas: () => HTMLCanvasElement | null;
-}
 
 BabylonViewer.displayName = "BabylonViewer";
 export default BabylonViewer;

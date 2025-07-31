@@ -1,8 +1,10 @@
 'use client'; // if using Next.js App Router
 
 import React from 'react'
-import { mat4, quat, vec3 } from "gl-matrix";
+import { mat4, vec3 } from "gl-matrix";
 import Script from "next/script";
+import { glMatrix } from 'gl-matrix';
+import { ViewerRef, BoundingBox } from '@/components/Viewers/ViewerRef';
 
 export type SampleViewerProps = {
   src?: string,
@@ -11,12 +13,134 @@ export type SampleViewerProps = {
   view: mat4,
   fov: number,
   aspect: number
+  setBBox: (range: BoundingBox) => void,
+  finishedLoading: () => void,
 }
 
-const SampleViewer = ({src, style, projection, view, fov, aspect}: SampleViewerProps) => {
+function jsToGl(array) {
+    if (array === undefined) {
+        return undefined;
+    }
+    let tensor = new glMatrix.ARRAY_TYPE(array.length);
+
+    for (let i = 0; i < array.length; ++i) {
+        tensor[i] = array[i];
+    }
+
+    return tensor;
+}
+
+function getExtentsFromAccessor(accessor, worldTransform, outMin, outMax)
+{
+    let min = jsToGl(accessor.min);
+    let max = jsToGl(accessor.max);
+    
+    if (accessor.normalized) {
+        min = gltfAccessor.dequantize(min, accessor.componentType);
+        max = gltfAccessor.dequantize(max, accessor.componentType);
+    }
+
+    // Construct all eight corners from min and max values
+    let boxVertices = [
+        vec3.fromValues(min[0], min[1], min[2]),
+        vec3.fromValues(min[0], min[1], max[2]),
+        vec3.fromValues(min[0], max[1], min[2]),
+        vec3.fromValues(min[0], max[1], max[2]),
+
+        vec3.fromValues(max[0], min[1], min[2]),
+        vec3.fromValues(max[0], min[1], max[2]),
+        vec3.fromValues(max[0], max[1], min[2]),
+        vec3.fromValues(max[0], max[1], max[2])];
+
+
+    // Transform all bounding box vertices
+    for(let i in boxVertices) { 
+        vec3.transformMat4(boxVertices[i], boxVertices[i], worldTransform); 
+    }
+
+    // Create new (axis-aligned) bounding box out of transformed bounding box
+    const boxMin = vec3.clone(boxVertices[0]); // initialize
+    const boxMax = vec3.clone(boxVertices[0]);
+
+    for(let i in boxVertices) {
+        for (const component of [0, 1, 2]) {
+            boxMin[component] = Math.min(boxMin[component], boxVertices[i][component]);
+            boxMax[component] = Math.max(boxMax[component], boxVertices[i][component]);
+        }
+    }
+
+    const center = vec3.create();
+    vec3.add(center, boxMax, boxMin);
+    vec3.scale(center, center, 0.5);
+
+    const centerToSurface = vec3.create();
+    vec3.sub(centerToSurface, boxMax, center);
+
+    const radius = vec3.length(centerToSurface);
+
+    for (const i of [0, 1, 2])
+    {
+        //outMin[i] = center[i] - radius;
+        //outMax[i] = center[i] + radius;
+        outMin[i] = boxMin[i];
+        outMax[i] = boxMax[i];
+    }
+}
+
+function getSceneExtents(gltf, sceneIndex, outMin, outMax)
+{
+    for (const i of [0, 1, 2])
+    {
+        outMin[i] = Number.POSITIVE_INFINITY;
+        outMax[i] = Number.NEGATIVE_INFINITY;
+    }
+
+    const scene = gltf.scenes[sceneIndex];
+
+    let nodeIndices = scene.nodes.slice();
+    while(nodeIndices.length > 0)
+    {
+        const node = gltf.nodes[nodeIndices.pop()];
+        nodeIndices = nodeIndices.concat(node.children);
+
+        if (node.mesh === undefined)
+        {
+            continue;
+        }
+
+        const mesh = gltf.meshes[node.mesh];
+        if (mesh.primitives === undefined)
+        {
+            continue;
+        }
+
+        for (const primitive of mesh.primitives)
+        {
+            const attribute = primitive.glAttributes.find(a => a.attribute == "POSITION");
+            if (attribute === undefined)
+            {
+                continue;
+            }
+
+            const accessor = gltf.accessors[attribute.accessor];
+            const assetMin = vec3.create();
+            const assetMax = vec3.create();
+            getExtentsFromAccessor(accessor, node.worldTransform, assetMin, assetMax);
+
+            for (const i of [0, 1, 2])
+            {
+                outMin[i] = Math.min(outMin[i], assetMin[i]);
+                outMax[i] = Math.max(outMax[i], assetMax[i]);
+            }
+        }
+    }
+}
+
+const SampleViewer = React.forwardRef<ViewerRef, SampleViewerProps>(({ src, style, projection, view, fov, aspect, setBBox, finishedLoading }: SampleViewerProps, ref) => {
+//const SampleViewer = ({src, style, projection, view, fov, aspect}: SampleViewerProps) => {
     const canvasRef = React.useRef<HTMLCanvasElement>(null)
-    const rendererRef = React.useRef(null)
-    const rendererPtRef = React.useRef(null)
+    const rendererRef = React.useRef<any>(null)
+    const stateRef = React.useRef<any>(null)
     const engineRef = React.useRef(null)
     const cameraRef = React.useRef<UserCamera>(null)
     const sceneRef = React.useRef(null)
@@ -25,13 +149,12 @@ const SampleViewer = ({src, style, projection, view, fov, aspect}: SampleViewerP
     const [dracoLoaded, setDracoLoaded] = React.useState(false);
 
     React.useEffect(() => {
-      console.warn("MOUNT");
       const isDracoLoaded = !!document.querySelector('script[src="https://www.gstatic.com/draco/v1/decoders/draco_decoder_gltf.js"]')
       const isKTXLoaded = !!document.querySelector('script[src="/libs/libktx.js"]')
       setKTXLoaded(isKTXLoaded);
       setDracoLoaded(isDracoLoaded);
  
-      return () => { console.warn("Unmount")};
+      return () => {};
     }, [])
 
     React.useEffect(() => {
@@ -40,80 +163,122 @@ const SampleViewer = ({src, style, projection, view, fov, aspect}: SampleViewerP
       if(canvasRef == null || canvasRef.current == null) { return; }
       const canvas = canvasRef.current;
       const webGl2Context = canvas.getContext('webgl2') as WebGL2RenderingContext;
-      //webGl2Context.clearColor(1,0,0,1);
-      //webGl2Context.clear(webGl2Context.COLOR_BUFFER_BIT);
   
       const load = async () => {
         const {GltfView, GltfState} = await import('@khronosgroup/gltf-viewer/dist/gltf-viewer.module.js');
         const gltfView = new GltfView(webGl2Context);
         const state = gltfView.createState();
         cameraRef.current = state.userCamera;
+        stateRef.current = state;
         state.sceneIndex = 0;
         state.animationIndices = [0, 1, 2];
         state.animationTimer.start();
-  
+
         canvas.width = canvas.clientWidth;
         canvas.height = canvas.clientHeight;
 
         const resourceLoader = gltfView.createResourceLoader();
         state.gltf = await resourceLoader.loadGltf(src);
-  
-            
+
         resourceLoader.loadEnvironment("/assets/chinese_garden_1k.hdr", {
           lut_ggx_file: "/assets/lut_ggx.png",
           lut_charlie_file: "/assets/lut_charlie.png",
           lut_sheen_E_file: "/assets/lut_sheen_E.png"
         }).then((environment) => {
+          console.log("environment", environment);
           state.environment = environment;
+          state.renderingParameters.blurEnvironmentMap = false;
+          state.renderingParameters.environmentRotation = 0;
         })
+
         const scene = state.gltf.scenes[state.sceneIndex];
+        rendererRef.current = gltfView.renderer;
         scene.applyTransformHierarchy(state.gltf);
         state.userCamera.perspective.aspectRatio = canvas.clientWidth / canvas.clientHeight;
         state.userCamera.resetView(state.gltf, state.sceneIndex);
+        
+        const extents = {min: new Float32Array(3), max: new Float32Array(3)};
+
+        getSceneExtents(state.gltf, state.sceneIndex, extents.min, extents.max);
+        setBBox(extents);
+        
         //state.userCamera.fitViewToScene(state.gltf, state.sceneIndex);
         //state.userCamera.orbitSpeed = Math.max(10.0 / canvas.width, 10.0 / canvas.height);
-        console.log("state.userCamera", state.userCamera);
-        console.log(typeof state.userCamera);
-        console.log(typeof state.userCamera);
-        console.log(state.userCamera.constructor.name);
-        console.log(state.userCamera.getViewMatrix);
+
         state.userCamera.getViewMatrix = function () {
           return view;
         };
-        console.log(canvas.width, canvas.height);
-        console.log(canvas.clientWidth, canvas.clientHeight);
 
         const update = () =>
         { 
-          const canvas = canvasRef.current;
-          console.log(canvas.clientWidth, canvas.clientHeight);
-
-          state.userCamera.resetView(state.gltf, state.sceneIndex);
-          state.userCamera.fitViewToScene(state.gltf, state.sceneIndex);
+          if (!canvasRef.current) {
+            window.requestAnimationFrame(update);
+            return;
+          }
+         
+          //state.userCamera.resetView(state.gltf, state.sceneIndex);
+          //state.userCamera.fitViewToScene(state.gltf, state.sceneIndex);
+        
+          //console.log("canvas.clientWidth, canvas.clientHeight", canvas.clientWidth, canvas.clientHeight)
           gltfView.renderFrame(state, canvas.clientWidth, canvas.clientHeight);
           window.requestAnimationFrame(update);
         };
         window.requestAnimationFrame(update);
 
-        const handleResize = () => {
+        /*const handleResize = () => {
           const canvas = canvasRef.current;
-          canvas.width = canvas.clientWidth;
-          //canvas.height = canvas.clientHeight;
-
-          //renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-          //console.log("RESIZING FROM DEEP INSIDE GPU PATH TRACER")
-          console.log("RESIZING FROM DEEP INSIDE GPU PATH TRACER", canvas.clientWidth, canvas.clientHeight)
+          if (!canvas) return;
+         
+          //canvas.width = canvas.clientWidth;
+          console.log("RESIZING CLIENT", canvas.clientWidth, canvas.clientHeight);
+          console.log("RESIZING", canvas.width, canvas.height);
+          window.requestAnimationFrame(update);
         }
         window.addEventListener('resize', handleResize)
+
+        const resizeObserver = new ResizeObserver(() => {
+          requestAnimationFrame(() => {
+            handleResize();
+          });
+        });*/
+        
+        finishedLoading();
       };
       load();
     }, [src, ktxLoaded, dracoLoaded])
+
+    React.useImperativeHandle(ref, () => ({
+      getCanvas: () => canvasRef.current,
+      resize: (width: number, height: number) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+         
+        canvas.width = canvas.clientWidth;
+      },
+    }));
 
     React.useEffect(() => {
       if (cameraRef.current === null) return;
       cameraRef.current.getViewMatrix = function () {
         return view;
       };
+      const inverse = mat4.create();
+      const camera  = cameraRef.current;
+      const state  = stateRef.current;
+
+      // Compute inverse without modifying viewMatrix
+      mat4.invert(inverse, view);
+      camera.transform = inverse;
+
+      camera.perspective.aspectRatio = aspect;
+      //camera.resetView(state.gltf, state.sceneIndex);
+        
+      const out = mat4.create();
+
+      // Invert the matrix
+      const cameraWorldMatrix = mat4.invert(mat4.create(), view);
+      const cameraPosition = vec3.transformMat4(vec3.create(), [0, 0, 0], cameraWorldMatrix);
+      //rendererRef.current.currentCameraPosition = cameraPosition;
     }, [projection, view, fov, aspect]);
 
     return (
@@ -126,6 +291,6 @@ const SampleViewer = ({src, style, projection, view, fov, aspect}: SampleViewerP
         />
       </>
     );
-}
+});
 
 export default SampleViewer;

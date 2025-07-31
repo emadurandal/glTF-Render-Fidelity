@@ -7,6 +7,7 @@ import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { WebGLPathTracer } from 'three-gpu-pathtracer';
+import { ViewerRef, BoundingBox} from '@/components/Viewers/ViewerRef';
 
 export type ThreeGPUPathTracerViewerProps = {
   src?: string,
@@ -14,31 +15,30 @@ export type ThreeGPUPathTracerViewerProps = {
   projection: mat4,
   view: mat4,
   fov: number,
-  aspect: number
+  aspect: number,
+  setBBox: (range: BoundingBox) => void,
 }
 
-const ThreeGPUPathTracerViewer = ({src, style, projection, view, fov, aspect}: ThreeGPUPathTracerViewerProps) => {
-    const canvasRef = React.useRef<HTMLCanvasElement>(null)
-    const rendererRef = React.useRef(null)
-    const rendererPtRef = React.useRef(null)
-    const engineRef = React.useRef(null)
-    const cameraRef = React.useRef(null)
-    const sceneRef = React.useRef(null)
+const ThreeGPUPathTracerViewer = React.forwardRef<ViewerRef, ThreeGPUPathTracerViewerProps>(({ src, style, projection, view, fov, aspect }: ThreeGPUPathTracerViewerProps, ref) => {
+//const ThreeGPUPathTracerViewer = ({src, style, projection, view, fov, aspect}: ThreeGPUPathTracerViewerProps) => {
+    const canvasRef = React.useRef<HTMLCanvasElement>(undefined)
+    const rendererRef = React.useRef<THREE.WebGLRenderer>(null)
+    const rendererPtRef = React.useRef<WebGLPathTracer>(null)
+    const cameraRef = React.useRef<THREE.PerspectiveCamera>(null)
+    const sceneRef = React.useRef<THREE.Scene>(null)
 
     React.useEffect(() => {
       const init = async () => {
         // Set up scene
         const canvas = canvasRef.current;
+        if (!canvas) return;
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0xffffffff);
 
         // Set up camera
-        const camera = new THREE.PerspectiveCamera(45, 1000 / 500, 0.1, 1000);
-        //const camera = new THREE.Camera();
+        const camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
         cameraRef.current = camera;
-        //camera.position.set(0, 1.5, 5);
         camera.matrixAutoUpdate = false;
-        camera.projectionMatrixAutoUpdate = false;
 
         const threeProjectionMatrix = new THREE.Matrix4().fromArray(projection);
         const threeViewMatrix = new THREE.Matrix4().fromArray(view);
@@ -60,6 +60,17 @@ const ThreeGPUPathTracerViewer = ({src, style, projection, view, fov, aspect}: T
         const gltf = await gltfLoader.loadAsync(src);
         const model = gltf.scene;
         scene.add(model);
+        const boundingBox = new THREE.Box3();
+
+        // 2. Compute the bounding box from the scene
+        boundingBox.setFromObject(scene);
+
+        // 3. (Optional) Get size and center
+        const size = new THREE.Vector3();
+        const center = new THREE.Vector3();
+
+        boundingBox.getSize(size);
+        boundingBox.getCenter(center);
 
         // renderer
         const renderer = new THREE.WebGLRenderer({ 
@@ -67,8 +78,10 @@ const ThreeGPUPathTracerViewer = ({src, style, projection, view, fov, aspect}: T
           alpha: false,
           canvas: canvasRef.current
         });
+        
         renderer.setSize(canvas.clientWidth, canvas.clientHeight);
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        rendererRef.current = renderer;
 
         // path tracer
         const pathTracer = new WebGLPathTracer( renderer );
@@ -127,12 +140,23 @@ const ThreeGPUPathTracerViewer = ({src, style, projection, view, fov, aspect}: T
       pathTracer.updateCamera();
     }, [projection, view, fov, aspect]);
 
+    React.useImperativeHandle(ref, () => ({
+      getCanvas: () => canvasRef.current,
+      resize: (width: number, height: number) => {
+        const canvas = canvasRef.current;
+        const renderer = rendererRef.current;
+        if (!canvas || !renderer) return;
+        console.log("THREE JS RESIZE PATH TRACER")
+        renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+      },
+    }));
+
     return (
       <canvas
         ref={canvasRef}
         style={style}
       />
     );
-}
+});
 
 export default ThreeGPUPathTracerViewer;

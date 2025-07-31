@@ -3,25 +3,32 @@
 import React from 'react'
 import { mat4, quat, vec3 } from "gl-matrix";
 import { Matrix4, Vector3 } from 'three';
+import { ViewerRef, BoundingBox } from '@/components/Viewers/ViewerRef';
+import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
+import * as THREE from 'three'
 
 export type ModelViewerProps = {
   src?: string,
   style?: React.CSSProperties
   projection: mat4,
   view: mat4,
+  fov: number,
+  aspect: number,
+  setBBox: (range: BoundingBox) => void,
 }
 
-const ModelViewer = ({src, style, projection, view}: ModelViewerProps) => {
-    const canvasRef = React.useRef(null)
-    const engineRef = React.useRef(null)
-    const cameraRef = React.useRef(null)
-    const sceneRef = React.useRef(null)
+const ModelViewer = React.forwardRef<ViewerRef, ModelViewerProps>(({ src, style, projection, view, fov, aspect }: ModelViewerProps, ref) => {
+    const canvasRef = React.useRef<HTMLCanvasElement>(null)
+    const rendererRef = React.useRef<THREE.WebGLRenderer>(null)
+    const cameraRef = React.useRef<THREE.PerspectiveCamera>(null)
+    const sceneRef = React.useRef<THREE.Scene>(null)
 
     React.useEffect(() => {
       import('@google/model-viewer'); // Dynamically import it on the client
       
       const viewer = document.querySelector('model-viewer');
-      viewer.addEventListener('load', () => {
+      if(!viewer) return;
+      viewer.addEventListener('load', async () => {
         if (!viewer) return;
 
         let threeRenderer;
@@ -32,7 +39,7 @@ const ModelViewer = ({src, style, projection, view}: ModelViewerProps) => {
           const renderer = privateAPI.find((value) => value.toString() == 'Symbol(renderer)'); // Find the "renderer" Symbol
           const sceneSym = privateAPI.find((value) => value.toString() == 'Symbol(scene)'); // Find the "scene" Symbol
           const controlsSym = privateAPI.find((value) => value.toString() == 'Symbol(controls)'); // Find the "scene" Symbol
-          debugger;
+
           if (renderer != null) { // If renderer was found
             threeRenderer = viewer[renderer].threeRenderer; // set threeRenderer to the threeRenderer object
           }
@@ -51,81 +58,72 @@ const ModelViewer = ({src, style, projection, view}: ModelViewerProps) => {
         if (!scene) return;
         if (!threeRenderer) return;
 
+        rendererRef.current = threeRenderer;
+        sceneRef.current = scene;
+        cameraRef.current = scene.camera;
         const threeCamera = scene.camera;
-        //const canvas = threeRenderer.canvas;
         const canvas = threeRenderer.domElement;
-
+        canvasRef.current = canvas;
+        
         // Update custom matrices here if needed
 
         scene.matrixAutoUpdate = false;
-        scene.matrixWorldAutoUpdate = false;
+        scene.matrixWorldAutoUpdate = true;
+
+        const envUrl = "../env_maps/chinese_garden_1k.hdr";
+        const env_map = await new RGBELoader().loadAsync( envUrl );
+        env_map.mapping = THREE.EquirectangularReflectionMapping;
+
+        scene.background = env_map;
+        scene.environment = env_map;
 
         threeCamera.matrixAutoUpdate = false;
         threeCamera.matrixWorldAutoUpdate = false;
         threeCamera.matrixWorldNeedsUpdate = false;
         threeCamera.projectionMatrixAutoUpdate = false;
 
-        const viewIdentity = new Matrix4().fromArray(mat4.create());
         const viewThree = new Matrix4().fromArray(view);
         const projectionThree = new Matrix4().fromArray(projection);
 
-        threeCamera.matrix.copy(viewIdentity);
-        threeCamera.modelViewMatrix.copy(viewThree);
-        threeCamera.matrixWorld.copy(viewThree);
+        //threeCamera.matrix.copy(viewIdentity);
+        //threeCamera.modelViewMatrix.copy(viewThree);
+        //threeCamera.matrixWorld.copy(viewThree);
+        threeCamera.matrixWorld.copy(viewThree).invert();
         threeCamera.matrixWorldInverse.copy(viewThree);
         threeCamera.projectionMatrix.copy(projectionThree);
         threeCamera.projectionMatrixInverse.copy( threeCamera.projectionMatrix ).invert();
 
         scene.updateMatrixWorld(true);
         scene.forceRescale();
-
         threeRenderer.render(scene, threeCamera);
       });
     }, []);
 
     React.useEffect(() => {
       const viewer = document.querySelector('model-viewer');
-
-      //return; 
       if (!viewer) return;
-
-      let threeRenderer;
-      let scene;
-      let controls;
-      for (let p = viewer; p != null; p = Object.getPrototypeOf(p)) { // Loop through toneMV object
-        const privateAPI = Object.getOwnPropertySymbols(p); // Get symbols (private API)
-        const renderer = privateAPI.find((value) => value.toString() == 'Symbol(renderer)'); // Find the "renderer" Symbol
-        const sceneSym = privateAPI.find((value) => value.toString() == 'Symbol(scene)'); // Find the "scene" Symbol
-        const controlsSym = privateAPI.find((value) => value.toString() == 'Symbol(controls)'); // Find the "scene" Symbol
-        debugger;
-        if (renderer != null) { // If renderer was found
-          threeRenderer = viewer[renderer].threeRenderer; // set threeRenderer to the threeRenderer object
-        }
-        if (sceneSym != null) { // Same with scene
-          scene = viewer[sceneSym];
-        }
-        if (controlsSym != null) { // Same with scene
-          controls = viewer[controlsSym];
-        }
-
-        if (threeRenderer != null && scene != null) { // If both are found, break out of the loop, as we have what we need
-          break;
-        }
-      }
     
-      console.log("CALLED AT LEAST ONCE 2");
-      console.log("scene", scene);
-      console.log("threeRenderer", threeRenderer);
-
+      const scene = sceneRef.current;
+      const renderer = rendererRef.current;
       if (!scene) return;
-      if (!threeRenderer) return;
+      if (!renderer) return;
+
+      const boundingBox = new THREE.Box3();
+
+      // 2. Compute the bounding box from the scene
+      boundingBox.setFromObject(scene);
+
+      // 3. (Optional) Get size and center
+      const size = new THREE.Vector3();
+      const center = new THREE.Vector3();
+
+      boundingBox.getSize(size);
+      boundingBox.getCenter(center);
 
       const threeCamera = scene.camera;
-      //const canvas = threeRenderer.canvas;
-      const canvas = threeRenderer.domElement;
+      const canvas = renderer.domElement;
 
       // Update custom matrices here if needed
-
       scene.matrixAutoUpdate = false;
       scene.matrixWorldAutoUpdate = false;
 
@@ -138,52 +136,27 @@ const ModelViewer = ({src, style, projection, view}: ModelViewerProps) => {
       const viewThree = new Matrix4().fromArray(view);
       const projectionThree = new Matrix4().fromArray(projection);
 
-      threeCamera.matrix.copy(viewIdentity);
-      threeCamera.modelViewMatrix.copy(viewThree);
-      threeCamera.matrixWorld.copy(viewThree);
+      //threeCamera.matrix.copy(viewIdentity);
+      //threeCamera.modelViewMatrix.copy(viewThree);
+      threeCamera.matrixWorld.copy(viewThree).invert();
       threeCamera.matrixWorldInverse.copy(viewThree);
       threeCamera.projectionMatrix.copy(projectionThree);
       threeCamera.projectionMatrixInverse.copy( threeCamera.projectionMatrix ).invert();
-
-      debugger;
-      controls.jumpToGoal();
-
-      scene.updateMatrixWorld(true);
-
-      /*const viewMatrix = new Matrix4();
-      viewMatrix.lookAt(
-        new Vector3(0, 0, 5), // eye position
-        new Vector3(0, 0, 0), // target
-        new Vector3(0, 1, 0)  // up vector
-      );
-      
-      // Apply to camera
-      threeCamera.matrix.copy(viewMatrix.invert());
-      threeCamera.matrixWorldNeedsUpdate = true;
-      
-      // Custom projection matrix if needed
-      const projectionMatrix = new Matrix4();
-      projectionMatrix.makePerspective(
-        -1, 1, 1, -1, // left, right, top, bottom
-        0.1, 1000     // near, far
-      );*/
-      //debugger; 
-      //threeCamera.updateProjectionMatrix();
-      //modelViewer.renderer.render(modelViewer.scene, modelViewer.camera);
-
-      //console.log(threeRenderer);
-      //console.log(camera);
-      //console.log(scene);
-
-      //debugger; 
-      //viewer.render(scene, threeCamera);
-      console.log("CALLED AT LEAST ONCE 1");
-      scene.forceRescale();
-      threeRenderer.render(scene, threeCamera);
+          
+      renderer.render(scene, threeCamera);
     }, [projection, view]);
 
     
-  const envMapUrl = "../env_maps/qwantani_afternoon_puresky_1k.hdr";
+    React.useImperativeHandle(ref, () => ({
+      getCanvas: () => canvasRef.current,
+      resize: (width: number, height: number) => {
+        const canvas = canvasRef.current;
+        const renderer = rendererRef.current;
+        if (!canvas || !renderer) return;
+        renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+      },
+    }));
+
   return (
     <model-viewer
       src={src}
@@ -193,6 +166,6 @@ const ModelViewer = ({src, style, projection, view}: ModelViewerProps) => {
       alt="A 3D model"
     ></model-viewer>
   );
-}
+});
 
 export default ModelViewer;

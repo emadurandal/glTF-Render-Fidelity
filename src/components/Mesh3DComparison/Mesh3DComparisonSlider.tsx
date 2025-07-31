@@ -4,11 +4,12 @@ import { Box } from "@mui/material";
 import SwitchLeftIcon from '@mui/icons-material/SwitchLeft';
 import SwitchRightIcon from '@mui/icons-material/SwitchRight';
 import { useTheme } from '@mui/material/styles';
-
+import * as THREE from 'three';
 import { EquiRectangularCubeTexture, HDRCubeTexture, Engine, Matrix, Scene, LoadSceneAsync, FreeCamera, ArcRotateCamera, Vector3, HemisphericLight, DirectionalLight, Color3, Color4, AppendSceneAsync } from '@babylonjs/core'
 //import { Engine, Matrix, Scene, LoadSceneAsync, FreeCamera, ArcRotateCamera, Vector3, HemisphericLight, DirectionalLight, Color3, Color4 } from '@babylonjs/core'
 import { registerBuiltInLoaders } from "@babylonjs/loaders/dynamic";
-
+import {  } from '@/components/Viewers/ViewerRef';
+import { ViewerRef, BoundingBox } from '@/components/Viewers/ViewerRef';
 import { mat4, quat, vec3 } from "gl-matrix";
 
 import dynamic from 'next/dynamic';
@@ -18,8 +19,6 @@ const BabylonViewer = dynamic(() => import('@/components/Viewers/BabylonViewer')
 const ThreeGPUPathTracerViewer = dynamic(() => import('@/components/Viewers/ThreeGPUPathTracerViewer'), { ssr: false });
 const SampleViewer = dynamic(() => import('@/components/Viewers/SampleViewer'), { ssr: false });
 
-import { BabylonViewerRef } from '@/components/Viewers/BabylonViewer';
-
 class ArcballCamera {
   pivot: vec3; // <-- Declare it
   distance: number; // also needed if you're using `distance`
@@ -27,6 +26,16 @@ class ArcballCamera {
   viewMatrix: mat4; // also needed if you're using `distance`
   lastMouse: number[]; // also needed if you're using `distance`
   rotationSpeed: number; // also needed if you're using `distance`
+
+  // === Camera orbit state ===
+  target: THREE.Vector3 = new THREE.Vector3(0, 0, 0); // Point to orbit around
+  radius: number = 5;
+  theta: number = 0;
+  phi: number = Math.PI / 2;
+
+  isDragging: boolean = false;
+
+  threeCamera: THREE.PerspectiveCamera = new THREE.PerspectiveCamera();
 
   constructor(pivot: vec3 = [0, 0, 0], distance = 20) {
     this.pivot = vec3.clone(pivot);
@@ -136,6 +145,85 @@ class ArcballCamera {
     mat4.lookAt(this.viewMatrix, cameraPos, this.pivot, [0, 1, 0]);
     return this.viewMatrix;
   }
+  
+  onMouseDown(event) {
+    this.isDragging = true;
+    this.lastMouse.x = event.clientX;
+    this.lastMouse.y = event.clientY;
+  }
+
+  // === Update camera position based on spherical coords ===
+  updateCameraPosition() {
+    const x = this.radius * Math.sin(this.phi) * Math.sin(this.theta);
+    const y = this.radius * Math.cos(this.phi);
+    const z = this.radius * Math.sin(this.phi) * Math.cos(this.theta);
+
+    this.threeCamera.position.set(x, y, z);
+    this.threeCamera.lookAt(this.target);
+
+    // If you're sending matrices elsewhere:
+    this.threeCamera.updateMatrix();
+    this.threeCamera.updateMatrixWorld();
+    this.threeCamera.updateProjectionMatrix();
+  }
+
+  updateAspectRatio(ar: number) {
+    this.threeCamera.aspect = ar;
+    this.threeCamera.updateProjectionMatrix();
+  }
+
+  onMouseWheel(event) {
+    event.preventDefault();
+
+    // Adjust radius with a zoom factor
+    const zoomSpeed = 0.2;
+    this.radius += event.deltaY * zoomSpeed * 0.01;
+
+    // Clamp to prevent flipping or going too close
+    this.radius = Math.max(0.1, Math.min(100.0, this.radius));
+
+    this.updateCameraPosition();
+  }
+
+  onMouseMove(event) {
+      if (!this.isDragging) return;
+
+      const dx = event.clientX - this.lastMouse.x;
+      const dy = event.clientY - this.lastMouse.y;
+
+      // Sensitivity factor
+      this.theta -= dx * 0.005;
+      this.phi -= dy * 0.005;
+
+      // Clamp phi to avoid upside-down camera
+      const epsilon = 0.01;
+      this.phi = Math.max(epsilon, Math.min(Math.PI - epsilon, this.phi));
+
+      this.lastMouse.x = event.clientX;
+      this.lastMouse.y = event.clientY;
+
+      this.updateCameraPosition();
+      console.log("THIS RADIUS", this.radius);
+
+  }
+
+  onMouseUp() {
+    this.isDragging = false;
+  }
+
+  // Set pivot dynamically
+  setRadius(newRadius: number) {
+    this.radius = newRadius;
+
+    this.updateCameraPosition();
+  }
+
+  // Set pivot dynamically
+  setPivot(newRadius: number) {
+    this.radius = newRadius;
+
+    this.updateCameraPosition();
+  }
 }
 
 export type Mesh3DComparisonSliderProps = {
@@ -149,12 +237,13 @@ export type Mesh3DComparisonSliderProps = {
 }
 
 const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, rtEngine1, rtEngine2, src, sliderPosition, setSliderPosition}: Mesh3DComparisonSliderProps) => {
+    const threeCameraRef = React.useRef<THREE.PerspectiveCamera>(null);
+    const cameraRef = React.useRef<ArcballCamera>(null);
     const imageRef = React.useRef<HTMLImageElement>(null);
     const image2Ref = React.useRef<HTMLImageElement>(null);
     const containerRef = React.useRef<HTMLDivElement>(null);
     const containerRootRef = React.useRef<HTMLDivElement>(null);
-    const camera_arc = new ArcballCamera([0, 0, 0], 5.75);
-
+    
     const theme = useTheme();
 
     const containerCurrent = imageRef && imageRef.current;
@@ -176,76 +265,112 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, rtEngine1, rtEngine2, src, sl
     //const canvasRef = React.useRef<HTMLCanvasElement>(null)
     const sliderRef = React.useRef(null);
     const sliderDragRef = React.useRef(false);
-    const canvasRef = React.useRef<BabylonViewerRef>(null);
-    const canvas2Ref = React.useRef<HTMLCanvasElement>(null)
+    const canvasRef = React.useRef<ViewerRef>(null);
+    const canvas2Ref = React.useRef<ViewerRef>(null)
     const engineRef = React.useRef<Engine | null>(null)
     const sceneRef = React.useRef<Scene | null>(null)
-    const [fov, setFov] = React.useState(Math.PI / 4)
+    const [fov, setFov] = React .useState(Math.PI / 4)
     const [aspect, setAspect] = React.useState(1)
     const [projection, setProjection] = React.useState(projection2)
-    const [view, setView] = React.useState(camera_arc.getViewMatrix())
+    const [view, setView] = React.useState(mat4.create())
+    const [extents, setExtents] = React.useState<BoundingBox>({min: new Float32Array(3), max: new Float32Array(3)})
     const [error, setError] = React.useState<string | null>(null)
     const [sliderDrag, setSliderDrag] = React.useState<boolean>(false)
 
-    const modelUrl = "../models/Duck_centered.glb";
+    const finishedLoading = () => {
+      if (!cameraRef.current) return;
+      const cam = cameraRef.current;
+    
+      // Projection matrix (Perspective or Orthographic)
+      const projectionMatrix = cam.threeCamera.projectionMatrix.clone(); // THREE.Matrix4
+
+      // View matrix (inverse of world matrix)
+      const viewMatrix = new THREE.Matrix4().copy(cam.threeCamera.matrixWorld).invert();
+
+      const projectionArray = projectionMatrix.toArray();
+      const viewArray = viewMatrix.toArray();
+
+      setView(viewArray);
+      setProjection(projectionArray);
+    }
+
+    const setBoundingBox = (b: BoundingBox) => {
+      const cam = cameraRef.current;
+      //const canvas = canvasRef.current.getCanvas();
+      //const canvas2 = canvas2Ref.current.getCanvas();
+
+      const boxMax = vec3.fromValues(b.max[0], b.max[1], b.max[2]);
+      const boxMin = vec3.fromValues(b.min[0], b.min[1], b.min[2]);
+
+      const diag = vec3.create();
+      const center = vec3.create();
+      vec3.add(center, boxMax, boxMin);
+      vec3.scale(center, center, 0.5);
+      vec3.sub(diag, boxMax, boxMin);
+      const radius = vec3.length(diag);
+      cam.setRadius(radius * 2);
+
+      // Projection matrix (Perspective or Orthographic)
+      const projectionMatrix = cam.threeCamera.projectionMatrix.clone(); // THREE.Matrix4
+
+      // View matrix (inverse of world matrix)
+      const viewMatrix = new THREE.Matrix4().copy(cam.threeCamera.matrixWorld).invert();
+
+      const projectionArray = projectionMatrix.toArray();
+      const viewArray = viewMatrix.toArray();
+
+      setView(viewArray);
+      setProjection(projectionArray);
+      setExtents(b);
+
+    };
 
     const toolReisze = () => {
-      if(canvasRef.current == null /*|| canvas2Ref.current == null*/
-        || imageRef.current == null
+      if(canvasRef.current == null || canvas2Ref.current == null
         || containerRef.current == null || containerRootRef.current == null) {
         return;
       }
     
-      const vhToPixels = (vh: number) => (vh * window.innerHeight) / 100;
+      const canvas = canvasRef.current.getCanvas();
+      const canvas2 = canvas2Ref.current.getCanvas();
 
-      const imageContainer = imageRef.current;
-      const canvasContainer = canvasRef.current.getCanvas();
+      //console.log("canvasRef.current", canvasRef.current);
+      //console.log("canvas2Ref.current", canvas2Ref.current);
+      if (canvas === null || canvas2 == null) return
 
-      const maxWidth = containerRootRef.current.clientWidth ;  // Set max width
-      const maxHeight = Math.max(containerRootRef.current.clientHeight, vhToPixels(70)); // Set max height
-      
-      const image_width = imageContainer.naturalWidth;
-      const image_height = imageContainer.naturalHeight;
-      const aspectRatio = image_height / image_width;
+      //const image_width = canvasContainer.width;
+      //const image_height = canvasContainer.height;
+      //const aspectRatio = image_height / image_width;
 
       // Calculate new dimensions while maintaining aspect ratio
       const width = containerRootRef.current.clientWidth;
-      const height = containerRootRef.current.clientWidth * aspectRatio;
-      console.log("Dimensions", width, height);
-      console.log("Dimensions", imageContainer.clientWidth, imageContainer.clientHeight);
-      
+      const height = containerRootRef.current.clientHeight;
+
+      //const width = canvas.clientWidth;
+      //const height = canvas.clientHeight;
+
       containerRef.current.style.width = width+"px";
       containerRef.current.style.height = height+"px";
-
-      const canvas = canvasRef.current.getCanvas();
-      if(!canvas) return;
       
       canvas.style.width = width+"px";
       canvas.style.height = height+"px";
 
-      //canvas2Ref.current.style.width = width+"px";
-      //canvas2Ref.current.style.height = height+"px";
+      canvas2.style.width = width+"px";
+      canvas2.style.height = height+"px";
+
+      canvasRef.current.resize(width, height);
+      canvas2Ref.current.resize(width, height);
+
+      const camera = cameraRef.current;
+      if(!camera) return;
+
+      camera.updateAspectRatio(width / height);
+      const projectionMatrix = camera.threeCamera.projectionMatrix.clone(); // THREE.Matrix4
+      const projectionArray = projectionMatrix.toArray();
+
+      setProjection(projectionArray);
+      setAspect(width / height);
     }
-
-    const getGeometricCenter = (scene: number) => {
-        /*const meshes = scene.meshes.filter(mesh => mesh.isVisible && mesh.getTotalVertices() > 0);
-
-        if (meshes.length === 0) {
-            return [0, 0, 0];
-        }
-
-        const centerSum = new Vector3(0, 0, 0);
-
-        meshes.forEach(mesh => {
-            const boundingInfo = mesh.getBoundingInfo();
-            const boundingCenter = boundingInfo.boundingBox.centerWorld;
-            centerSum.addInPlace(boundingCenter);
-        });
-
-        return centerSum.scale(1 / meshes.length).asArray();*/
-        return 1;
-    }
-
 
     const isInside = (e:MouseEvent, r:DOMRect, m:number ) => {
       return e.clientX >= (r.left - m) && e.clientX <= (r.right + m) &&
@@ -253,29 +378,43 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, rtEngine1, rtEngine2, src, sl
     };
 
     React.useEffect(() => {
+      console.log("BBOXING", extents);
+    }, [extents])
+
+    React.useEffect(() => {
+      const camera_arc = new ArcballCamera([0, 0, 0], 5.75);
+      cameraRef.current = camera_arc;
+    
       const container = canvasRef.current;
       if (containerRootRef.current === null) return;
-      /*containerRootRef.current.addEventListener('mousedown', (e) => {
-        const slider = sliderRef.current;
-        const rect = slider.getBoundingClientRect();
-        sliderDragRef.current = isInside(e, rect, 10);
-        console.log("isInside(e, rect)", isInside(e, rect, 10));
-        if (!sliderDragRef.current)
-          camera_arc.startRotation(e.clientX, e.clientY);
-      }, true);*/
 
       containerRootRef.current.addEventListener('pointerdown', (e) => {
-      if (sliderRef.current === null) return;
+        if (sliderRef.current === null) return;
+
         const slider = sliderRef.current;
         const rect = slider.getBoundingClientRect();
         sliderDragRef.current = isInside(e, rect, 10);
-        console.log("isInside(e, rect)", isInside(e, rect, 10));
+
         if (sliderDragRef.current) return;
 
         const canvas = canvasRef.current.getCanvas();
         const [x, y] = camera_arc.getMousePositionInCanvas(e, canvas);
 
-        camera_arc.startRotation(e.clientX, e.clientY);
+        //camera_arc.startRotation(e.clientX, e.clientY);
+        camera_arc.onMouseDown(e);
+
+        // Projection matrix (Perspective or Orthographic)
+        const projectionMatrix = camera_arc.threeCamera.projectionMatrix.clone(); // THREE.Matrix4
+
+        // View matrix (inverse of world matrix)
+        const viewMatrix = new THREE.Matrix4().copy(camera_arc.threeCamera.matrixWorld).invert();
+
+        const projectionArray = projectionMatrix.toArray();
+        const viewArray = viewMatrix.toArray();
+
+        setView(viewArray);
+        setProjection(projectionArray);
+
       }, true);
 
       containerRootRef.current.addEventListener('pointermove', (e) => {
@@ -287,15 +426,34 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, rtEngine1, rtEngine2, src, sl
 
           const canvas = canvasRef.current.getCanvas();
           const [x, y] = camera_arc.getMousePositionInCanvas(e, canvas);
-          camera_arc.rotate(x, y, canvas.width, canvas.height);
-          setView([...camera_arc.getViewMatrix()]);
+          //camera_arc.rotate(x, y, canvas.width, canvas.height);
+          
+          camera_arc.onMouseMove(e);
+
+          // Projection matrix (Perspective or Orthographic)
+          const projectionMatrix = camera_arc.threeCamera.projectionMatrix.clone(); // THREE.Matrix4
+
+          // View matrix (inverse of world matrix)
+          const viewMatrix = new THREE.Matrix4().copy(camera_arc.threeCamera.matrixWorld).invert();
+
+          const projectionArray = projectionMatrix.toArray();
+          const viewArray = viewMatrix.toArray();
+
+          setView(viewArray);
+          setProjection(projectionArray);
+          //setView([...camera_arc.getViewMatrix()]);
         }
       }, true);
 
       containerRootRef.current.addEventListener('wheel', (e) => {
         e.preventDefault();
-        camera_arc.zoom(e.deltaY * 0.01);
-        setView([...camera_arc.getViewMatrix()]);
+        camera_arc.onMouseWheel(e);
+        // View matrix (inverse of world matrix)
+        const viewMatrix = new THREE.Matrix4().copy(camera_arc.threeCamera.matrixWorld).invert();
+
+        const viewArray = viewMatrix.toArray();
+
+        setView(viewArray);
       }, true);
 
       const fovy = Math.PI / 4;
@@ -308,7 +466,38 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, rtEngine1, rtEngine2, src, sl
 
       setFov(Math.PI / 4);
       setAspect(containerRootRef.current.clientWidth / containerRootRef.current.clientHeight);
-    
+          
+      const fovThree = 45;
+      const aspectThree  = window.innerWidth / window.innerHeight;
+      const nearThree  = 0.1;
+      const farThree  = 1000;
+
+      const cameraThree = new THREE.PerspectiveCamera(fovThree, aspect, near, far);
+      
+      // Optional: set initial position and rotation
+      cameraThree.position.set(0, 0, 2);
+      cameraThree.lookAt(new THREE.Vector3(0, 0, 0));
+      cameraThree.updateMatrix();       // Update local matrix
+      cameraThree.updateMatrixWorld(); // Update world matrix
+      cameraThree.updateProjectionMatrix(); // 
+      
+      // Projection matrix (Perspective or Orthographic)
+      const projectionMatrix = cameraThree.projectionMatrix.clone(); // THREE.Matrix4
+
+      // View matrix (inverse of world matrix)
+      const viewMatrix = new THREE.Matrix4().copy(cameraThree.matrixWorld).invert();
+
+      const projectionArray = projectionMatrix.toArray();
+      const viewArray = viewMatrix.toArray();
+
+      setView(viewArray);
+      setProjection(projectionArray);
+
+      // Or, use:
+      const viewMatrixAlt = cameraThree.matrixWorldInverse.clone();
+      threeCameraRef.current = cameraThree;
+      camera_arc.threeCamera = cameraThree;
+
       const resizeObserver = new ResizeObserver(() => {
         requestAnimationFrame(() => {
           toolReisze();
@@ -336,28 +525,6 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, rtEngine1, rtEngine2, src, sl
       }
     };
   
-    const projectToSphere = (x, y, width, height) => {
-      const radius = Math.min(width, height) / 2;
-      const cx = width / 2;
-      const cy = height / 2;
-
-      // Normalize coordinates to [-1, 1]
-      let dx = (x - cx) / radius;
-      let dy = (cy - y) / radius; // Invert Y for screen-space
-
-      const length = dx * dx + dy * dy;
-      let dz = 0;
-      if (length <= 1.0) {
-        dz = Math.sqrt(1.0 - length);
-      } else {
-        const norm = 1 / Math.sqrt(length);
-        dx *= norm;
-        dy *= norm;
-      }
-
-      return vec3.fromValues(dx, dy, dz);
-    }
-
     const handleMouseDown = (event: React.MouseEvent) => {
       event.preventDefault();
       const onMouseMove = (e: MouseEvent) => handleDrag(e.clientX);
@@ -378,18 +545,6 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, rtEngine1, rtEngine2, src, sl
           document.removeEventListener("touchmove", onTouchMove);
         });
     };
-
-    const handleOnLoad = () => {
-      const resizeObserver = new ResizeObserver(() => {
-        requestAnimationFrame(() => {
-          toolReisze();
-        });
-      });
-
-      // Observe the canvas
-      //resizeObserver.observe(containerRootRef.current);
-      resizeObserver.observe(document.body);
-    }
 
     return (<>
       <Box 
@@ -414,35 +569,22 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, rtEngine1, rtEngine2, src, sl
               overflow: "hidden",
               cursor: "pointer",
               userSelect: "none",
-              //maxWidth: '70vh',
-              //maxHeight: '70vh',
               touchAction:'none'
             }}
             onMouseDown={handleMouseDown}
             onTouchStart={handleTouchStart}
           >
-            {/* Background Image */}
-        {/* Background Image */}
-        <img
-          ref={imageRef}
-          src={imgSrc2}
-          alt="Background"
-          style={{
-            width: '100%',
-            objectFit: "contain",
-            position: "absolute",
-            display: "none",
-            top: 0,
-            //left: 0,
-          }}
-          onLoad={handleOnLoad}
-        />
 
-        <BabylonViewer
+        {/* Background Image */}
+        {rtEngine2==="three-gpu-pathtracer" && <ThreeGPUPathTracerViewer 
           ref={canvasRef}
           src={src}
           projection={projection}
           view={view}
+          fov={fov}
+          aspect={aspect}
+          setBBox={setBoundingBox}
+          finishedLoading={finishedLoading}
           style={{
             width: '100%',
             height: '100%',
@@ -452,16 +594,77 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, rtEngine1, rtEngine2, src, sl
             top: 0,
             //left: 0,
           }}
-        />
+        />}
 
-        {/* Foreground Image */}
-        
-        {rtEngine1==="three-gpu-pathtracer" && <ThreeGPUPathTracerViewer 
+        {rtEngine2==="gltf-sample-viewer" && <SampleViewer 
+          ref={canvasRef}
           src={src}
           projection={projection}
           view={view}
           fov={fov}
           aspect={aspect}
+          setBBox={setBoundingBox}
+          finishedLoading={finishedLoading}
+          style={{
+            width: '100%',
+            height: '100%',
+            backgroundColor: "white",
+            objectFit: "contain",
+            position: "absolute",
+            top: 0,
+            //left: 0,
+          }}
+        />}
+        {rtEngine2==="babylon.js" && <BabylonViewer 
+          ref={canvasRef}
+          src={src}
+          projection={projection}
+          view={view}
+          fov={fov}
+          aspect={aspect}
+          setBBox={setBoundingBox}
+          finishedLoading={finishedLoading}
+          style={{
+            width: '100%',
+            height: '100%',
+            backgroundColor: "white",
+            objectFit: "contain",
+            position: "absolute",
+            top: 0,
+            //left: 0,
+          }}
+        />}
+        {rtEngine2==="model-viewer" && <ModelViewer 
+          ref={canvasRef}
+          src={src}
+          projection={projection}
+          view={view}
+          fov={fov}
+          aspect={aspect}
+          setBBox={setBoundingBox}
+          finishedLoading={finishedLoading}
+          style={{
+            width: '100%',
+            height: '100%',
+            backgroundColor: "white",
+            objectFit: "contain",
+            position: "absolute",
+            top: 0,
+            //left: 0,
+          }}
+        />}
+
+        {/* Foreground Image */}
+
+        {rtEngine1==="three-gpu-pathtracer" && <ThreeGPUPathTracerViewer 
+          ref={canvas2Ref}
+          src={src}
+          projection={projection}
+          view={view}
+          fov={fov}
+          aspect={aspect}
+          setBBox={setBoundingBox}
+          finishedLoading={finishedLoading}
           style={{
             width: '100%',
             height: '100%',
@@ -469,17 +672,22 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, rtEngine1, rtEngine2, src, sl
             position: "absolute",
             top: 0,
             //left: 0,
+            userSelect: "none",
+            outline: "none",
             backgroundColor: "white",
             clipPath: `inset(0 ${100 - sliderPosition}% 0 0)`, // Adjust visible area
           }}
         />}
 
         {rtEngine1==="gltf-sample-viewer" && <SampleViewer 
+          ref={canvas2Ref}
           src={src}
           projection={projection}
           view={view}
           fov={fov}
           aspect={aspect}
+          setBBox={setBoundingBox}
+          finishedLoading={finishedLoading}
           style={{
             width: '100%',
             height: '100%',
@@ -487,10 +695,57 @@ const Mesh3DComparisonSlider = ({imgSrc1, imgSrc2, rtEngine1, rtEngine2, src, sl
             position: "absolute",
             top: 0,
             //left: 0,
+            userSelect: "none",
+            outline: "none",
             backgroundColor: "white",
             clipPath: `inset(0 ${100 - sliderPosition}% 0 0)`, // Adjust visible area
           }}
         />}
+        {rtEngine1==="babylon.js" && <BabylonViewer 
+          ref={canvas2Ref}
+          src={src}
+          projection={projection}
+          view={view}
+          fov={fov}
+          aspect={aspect}
+          setBBox={setBoundingBox}
+          finishedLoading={finishedLoading}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: "contain",
+            position: "absolute",
+            top: 0,
+            //left: 0,
+            userSelect: "none",
+            outline: "none",
+            backgroundColor: "white",
+            clipPath: `inset(0 ${100 - sliderPosition}% 0 0)`, // Adjust visible area
+          }}
+        />}
+        {rtEngine1==="model-viewer" && <ModelViewer 
+          ref={canvas2Ref}
+          src={src}
+          projection={projection}
+          view={view}
+          fov={fov}
+          aspect={aspect}
+          setBBox={setBoundingBox}
+          finishedLoading={finishedLoading}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: "contain",
+            position: "absolute",
+            top: 0,
+            //left: 0,
+            userSelect: "none",
+            outline: "none",
+            backgroundColor: "white",
+            clipPath: `inset(0 ${100 - sliderPosition}% 0 0)`, // Adjust visible area
+          }}
+        />}
+
        <Box
         ref={sliderRef}
         sx={{
