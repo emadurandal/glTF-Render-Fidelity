@@ -112,13 +112,41 @@ const BabylonViewer = React.forwardRef<ViewerRef, BabylonViewerProps>(({ src, st
         }
       });
 
+      const envMapUrl = "../env_maps/chinese_garden_1k.hdr";
+      const loadHDRAsync = async (url: string, scene: Scene): Promise<Nullable<BaseTexture>> => {
+        return new Promise((resolve) => {
+          const hdr = new HDRCubeTexture(url, scene, 512, false, true, false, true);
+          hdr.onLoadObservable.addOnce(() => resolve(hdr));
+        });
+      }
+      const reflectionTexture = await loadHDRAsync(envMapUrl, scene);
+      if (!reflectionTexture) {
+        return () => {
+          //window.removeEventListener('resize', handleResize)
+          //engine.dispose()
+        }
+      }
+      // Apply as environment and background
+      scene.environmentTexture = reflectionTexture;
+      const envMapRotationY = Math.PI / 2;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (scene.environmentTexture as any).setReflectionTextureMatrix(Matrix.RotationY(envMapRotationY));
+
+      const skybox = scene.createDefaultSkybox(reflectionTexture, true, 1000);
+      // Rotate the skybox texture
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (skybox && skybox.material && (skybox.material as any).reflectionTexture) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (skybox.material as any).reflectionTexture.rotationY = envMapRotationY; // Rotate 90 degrees
+      }
+
       // Optional: adjust exposure and contrast
-      scene.imageProcessingConfiguration.exposure = 1.5;
-      scene.imageProcessingConfiguration.contrast = 1.2;
+      //scene.imageProcessingConfiguration.exposure = 1.5;
+      //scene.imageProcessingConfiguration.contrast = 1.2;
 
       // Every frame: submit matrices to Babylon
       scene.registerBeforeRender(() => {
-          
         const viewBabylon = Matrix.FromArray(view);
         const projBabylon = Matrix.FromArray(projection);
 
@@ -144,56 +172,13 @@ const BabylonViewer = React.forwardRef<ViewerRef, BabylonViewerProps>(({ src, st
         //scene.setTransformMatrix(viewBabylon, projBabylon)
       });
 
+      scene.animationGroups.forEach(group => {
+        group.stop(); // Stop it from playing
+      });
       // Render loop
-      //engine.runRenderLoop(() => {
-        //scene.render()
-      //})
-      engine.stopRenderLoop();
-      scene.render()
-
-      // Handle resize
-      /*const handleResize = () => {
-        const canvas = canvasRef.current;
-        engine.resize()
-      }
-      window.addEventListener('resize', handleResize)
-
-      const resizeObserver = new ResizeObserver(() => {
-        requestAnimationFrame(() => {
-          engine.resize()
-        });
-      });*/
-
-      const envMapUrl = "../env_maps/chinese_garden_1k.hdr";
-      const loadHDRAsync = async (url: string, scene: Scene): Promise<Nullable<BaseTexture>> => {
-        return new Promise((resolve) => {
-          const hdr = new HDRCubeTexture(url, scene, 512, false, true, false, true);
-          hdr.onLoadObservable.addOnce(() => resolve(hdr));
-        });
-      }
-
-      const reflectionTexture = await loadHDRAsync(envMapUrl, scene);
-      if (!reflectionTexture) {
-        finishedLoading();
-        return () => {
-          //window.removeEventListener('resize', handleResize)
-          engine.dispose()
-        }
-      }
-      // Apply as environment and background
-      scene.environmentTexture = reflectionTexture;
-      const envMapRotationY = Math.PI / 2;
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (scene.environmentTexture as any).setReflectionTextureMatrix(Matrix.RotationY(envMapRotationY));
-
-      const skybox = scene.createDefaultSkybox(reflectionTexture, true, 1000);
-      // Rotate the skybox texture
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (skybox && skybox.material && (skybox.material as any).reflectionTexture) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (skybox.material as any).reflectionTexture.rotationY = envMapRotationY; // Rotate 90 degrees
-      }
+      engine.runRenderLoop(() => {
+        scene.render()
+      })
 
       // Observe the canvas
       //resizeObserver.observe(containerRootRef.current);
@@ -246,7 +231,7 @@ const BabylonViewer = React.forwardRef<ViewerRef, BabylonViewerProps>(({ src, st
       //camera._refreshFrustumPlanes();
       //scene.setTransformMatrix(viewBabylon, projBabylon)
     });
-    scene.render();
+    //scene.render();
   }, [projection, view, aspect, fov]);
 
   React.useImperativeHandle(ref, () => ({

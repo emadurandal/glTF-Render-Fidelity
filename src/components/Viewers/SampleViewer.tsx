@@ -187,6 +187,7 @@ const SampleViewer = React.forwardRef<ViewerRef, SampleViewerProps>(({ src, styl
     React.useEffect(() => {
       if((ktxLoaded && dracoLoaded) == false)
         return;
+
       if(canvasRef == null || canvasRef.current == null) { return; }
       const canvas = canvasRef.current;
       const webGl2Context = canvas.getContext('webgl2') as WebGL2RenderingContext;
@@ -198,7 +199,7 @@ const SampleViewer = React.forwardRef<ViewerRef, SampleViewerProps>(({ src, styl
         cameraRef.current = state.userCamera;
         stateRef.current = state;
         state.sceneIndex = 0;
-        state.animationIndices = [0, 1, 2];
+        state.animationIndices = [];
         state.animationTimer.start();
 
         canvas.width = canvas.clientWidth;

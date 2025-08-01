@@ -63,7 +63,7 @@ export default function ComparePage({name, label, renderViews, description, down
   }
   const variant3D = getPreferredVariant(variants);
   //const src3D = downloadUrl ? downloadUrl : srcRoot + "/" + name + "/" + variant3D[0] + "/" + variant3D[1];
-  const src3D = variant3D ? srcRoot + "/" + name + "/" + variant3D[0] + "/" + variant3D[1] : "";
+  const src3D = !downloadUrl ? (variant3D ? srcRoot + "/" + name + "/" + variant3D[0] + "/" + variant3D[1] : "") : downloadUrl;
 
   const toggleDiv = () => {
     setIsVisible(!isVisible);

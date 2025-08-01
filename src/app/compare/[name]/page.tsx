@@ -74,9 +74,6 @@ export default async function Page({params}: { params: Promise<{ name: string }>
   const { name } = await params;
 
   const model = (models as Record<string, ModelData>)[name];
-  console.log(model);
-  console.log(typeof model.variants);
-  console.log(model.variants);
 
   const render_views = model.images;
   
