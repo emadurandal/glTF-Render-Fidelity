@@ -45,7 +45,7 @@ export default function ComparePage({name, label, renderViews, description, down
   const [engine1, setEngine1] = React.useState('three.js');
   const [engine2, setEngine2] = React.useState('filament.js');
   const [rtEngine1, setRtEngine1] = React.useState('gltf-sample-viewer');
-  const [rtEngine2, setRtEngine2] = React.useState('babylon.js');
+  const [rtEngine2, setRtEngine2] = React.useState('model-viewer');
   const [nextEngine, setNextEngine] = React.useState(0);
   const [comparisonMode, setComparisonMode] = React.useState(3);
   const [shareSnackbarOpen, setShareSnackbarOpen] = React.useState(false);

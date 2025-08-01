@@ -146,31 +146,7 @@ const BabylonViewer = React.forwardRef<ViewerRef, BabylonViewerProps>(({ src, st
       //scene.imageProcessingConfiguration.contrast = 1.2;
 
       // Every frame: submit matrices to Babylon
-      scene.registerBeforeRender(() => {
-        const viewBabylon = Matrix.FromArray(view);
-        const projBabylon = Matrix.FromArray(projection);
-
-        const extractPositionFromViewMatrix = (view: Matrix): Vector3 => {
-            // Inverse view matrix gives the camera world matrix
-            const inv = new Matrix();
-            view.invertToRef(inv);
-            return Vector3.TransformCoordinates(Vector3.Zero(), inv);
-        }
-
-        camera.freezeProjectionMatrix(projBabylon);      // Use our custom projection
-        camera.getViewMatrix = () => {
-          viewBabylon.clone();
-          camera._computedViewMatrix = viewBabylon.clone();
-          //camera._computedViewMatrix.invertToRef(camera._worldMatrix);
-          return viewBabylon.clone();
-        } // Override view matrix
-        camera.getTransformationMatrix=  () => viewBabylon.clone()
-        camera._position = extractPositionFromViewMatrix(viewBabylon);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (camera as any)._globalPosition = extractPositionFromViewMatrix(viewBabylon);
-        //camera._refreshFrustumPlanes();
-        //scene.setTransformMatrix(viewBabylon, projBabylon)
-      });
+ 
 
       scene.animationGroups.forEach(group => {
         group.stop(); // Stop it from playing

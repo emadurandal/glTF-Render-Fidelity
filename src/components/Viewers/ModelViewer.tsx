@@ -81,7 +81,7 @@ const ModelViewer = React.forwardRef<ViewerRef, ModelViewerProps>(({ src, style,
 
         boundingBox.getSize(size);
         boundingBox.getCenter(center);
-        
+
         // Update custom matrices here if needed
         scene.matrixAutoUpdate = false;
         scene.matrixWorldAutoUpdate = true;
@@ -112,7 +112,7 @@ const ModelViewer = React.forwardRef<ViewerRef, ModelViewerProps>(({ src, style,
         scene.updateMatrixWorld(true);
         scene.forceRescale();
 
-        //finishedLoading();
+        finishedLoading();
         //threeRenderer.render(scene, threeCamera);
       });
       return () => {
