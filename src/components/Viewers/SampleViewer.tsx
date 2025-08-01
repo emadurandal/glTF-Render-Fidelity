@@ -5,6 +5,7 @@ import { mat4, vec3 } from "gl-matrix";
 import Script from "next/script";
 import { glMatrix } from 'gl-matrix';
 import { ViewerRef, BoundingBox} from '@/types/ViewerRef';
+import { basePath } from '@/lib/paths';
 
 export type SampleViewerProps = {
   src?: string,
@@ -176,7 +177,7 @@ const SampleViewer = React.forwardRef<ViewerRef, SampleViewerProps>(({ src, styl
 
     React.useEffect(() => {
       const isDracoLoaded = !!document.querySelector('script[src="https://www.gstatic.com/draco/v1/decoders/draco_decoder_gltf.js"]')
-      const isKTXLoaded = !!document.querySelector('script[src="/libs/libktx.js"]')
+      const isKTXLoaded = !!document.querySelector(`script[src="${basePath}/libs/libktx.js"]`)
       setKTXLoaded(isKTXLoaded);
       setDracoLoaded(isDracoLoaded);
  
@@ -310,7 +311,7 @@ const SampleViewer = React.forwardRef<ViewerRef, SampleViewerProps>(({ src, styl
     return (
       <>
         <Script src="https://www.gstatic.com/draco/v1/decoders/draco_decoder_gltf.js" strategy="lazyOnload" onLoad={() => { console.log("LOADEDDDDDDDD Draco"); setDracoLoaded(true);}} />
-        <Script src="/libs/libktx.js" strategy="lazyOnload" onLoad={() => { console.log("LOADEDDDDDDDD KTX"); setKTXLoaded(true); }}/>
+        <Script src={`${basePath}/libs/libktx.js`} strategy="lazyOnload" onLoad={() => { console.log("LOADEDDDDDDDD KTX"); setKTXLoaded(true); }}/>
         <canvas
           ref={canvasRef}
           style={style}
