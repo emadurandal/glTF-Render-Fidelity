@@ -3,9 +3,10 @@
 import React from 'react'
 import { mat4, quat, vec3 } from "gl-matrix";
 import { Matrix4, Vector3 } from 'three';
-import { ViewerRef, BoundingBox } from '@/components/Viewers/ViewerRef';
+import { ViewerRef, BoundingBox} from '@/types/ViewerRef';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import * as THREE from 'three'
+import { ModelViewerElement } from '@google/model-viewer';
 
 export type ModelViewerProps = {
   src?: string,
@@ -15,9 +16,10 @@ export type ModelViewerProps = {
   fov: number,
   aspect: number,
   setBBox: (range: BoundingBox) => void,
+  finishedLoading: () => void,
 }
 
-const ModelViewer = React.forwardRef<ViewerRef, ModelViewerProps>(({ src, style, projection, view, fov, aspect }: ModelViewerProps, ref) => {
+const ModelViewer = React.forwardRef<ViewerRef, ModelViewerProps>(({ src, style, projection, view, finishedLoading, fov, aspect }: ModelViewerProps, ref) => {
     const canvasRef = React.useRef<HTMLCanvasElement>(null)
     const rendererRef = React.useRef<THREE.WebGLRenderer>(null)
     const cameraRef = React.useRef<THREE.PerspectiveCamera>(null)
@@ -41,13 +43,16 @@ const ModelViewer = React.forwardRef<ViewerRef, ModelViewerProps>(({ src, style,
           const controlsSym = privateAPI.find((value) => value.toString() == 'Symbol(controls)'); // Find the "scene" Symbol
 
           if (renderer != null) { // If renderer was found
-            threeRenderer = viewer[renderer].threeRenderer; // set threeRenderer to the threeRenderer object
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            threeRenderer = (viewer as any)[renderer].threeRenderer; // set threeRenderer to the threeRenderer object
           }
           if (sceneSym != null) { // Same with scene
-            scene = viewer[sceneSym];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            scene = (viewer as any)[sceneSym];
           }
           if (controlsSym != null) { // Same with scene
-            controls = viewer[controlsSym];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            controls = (viewer as any)[controlsSym];
           }
 
           if (threeRenderer != null && scene != null) { // If both are found, break out of the loop, as we have what we need
@@ -65,8 +70,19 @@ const ModelViewer = React.forwardRef<ViewerRef, ModelViewerProps>(({ src, style,
         const canvas = threeRenderer.domElement;
         canvasRef.current = canvas;
         
-        // Update custom matrices here if needed
+         const boundingBox = new THREE.Box3();
 
+        // 2. Compute the bounding box from the scene
+        boundingBox.setFromObject(scene);
+
+        // 3. (Optional) Get size and center
+        const size = new THREE.Vector3();
+        const center = new THREE.Vector3();
+
+        boundingBox.getSize(size);
+        boundingBox.getCenter(center);
+        
+        // Update custom matrices here if needed
         scene.matrixAutoUpdate = false;
         scene.matrixWorldAutoUpdate = true;
 
@@ -95,8 +111,16 @@ const ModelViewer = React.forwardRef<ViewerRef, ModelViewerProps>(({ src, style,
 
         scene.updateMatrixWorld(true);
         scene.forceRescale();
-        threeRenderer.render(scene, threeCamera);
+
+        //finishedLoading();
+        //threeRenderer.render(scene, threeCamera);
       });
+      return () => {
+        if (sceneRef.current) {
+          if(sceneRef.current.environment) 
+            sceneRef.current.environment.dispose()
+        }
+      }
     }, []);
 
     React.useEffect(() => {
@@ -108,20 +132,8 @@ const ModelViewer = React.forwardRef<ViewerRef, ModelViewerProps>(({ src, style,
       if (!scene) return;
       if (!renderer) return;
 
-      const boundingBox = new THREE.Box3();
-
-      // 2. Compute the bounding box from the scene
-      boundingBox.setFromObject(scene);
-
-      // 3. (Optional) Get size and center
-      const size = new THREE.Vector3();
-      const center = new THREE.Vector3();
-
-      boundingBox.getSize(size);
-      boundingBox.getCenter(center);
-
-      const threeCamera = scene.camera;
-      const canvas = renderer.domElement;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const threeCamera = (scene as any).camera;
 
       // Update custom matrices here if needed
       scene.matrixAutoUpdate = false;
@@ -132,7 +144,6 @@ const ModelViewer = React.forwardRef<ViewerRef, ModelViewerProps>(({ src, style,
       threeCamera.matrixWorldNeedsUpdate = false;
       threeCamera.projectionMatrixAutoUpdate = false;
 
-      const viewIdentity = new Matrix4().fromArray(mat4.create());
       const viewThree = new Matrix4().fromArray(view);
       const projectionThree = new Matrix4().fromArray(projection);
 
@@ -158,14 +169,11 @@ const ModelViewer = React.forwardRef<ViewerRef, ModelViewerProps>(({ src, style,
     }));
 
   return (
-    <model-viewer
-      src={src}
-      camera-target="0m 0m 0m"
-      interaction-prompt="none"
-      style={style}
-      alt="A 3D model"
-    ></model-viewer>
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    <model-viewer src={src} camera-target="0m 0m 0m" interaction-prompt="none" style={style} alt="A 3D model"></model-viewer>
   );
 });
 
+ModelViewer.displayName = 'ModelViewer';
 export default ModelViewer;

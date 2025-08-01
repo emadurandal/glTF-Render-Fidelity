@@ -7,7 +7,7 @@ import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { WebGLPathTracer } from 'three-gpu-pathtracer';
-import { ViewerRef, BoundingBox} from '@/components/Viewers/ViewerRef';
+import { ViewerRef, BoundingBox} from '@/types/ViewerRef';
 
 export type ThreeGPUPathTracerViewerProps = {
   src?: string,
@@ -17,15 +17,17 @@ export type ThreeGPUPathTracerViewerProps = {
   fov: number,
   aspect: number,
   setBBox: (range: BoundingBox) => void,
+  finishedLoading: () => void,
 }
 
 const ThreeGPUPathTracerViewer = React.forwardRef<ViewerRef, ThreeGPUPathTracerViewerProps>(({ src, style, projection, view, fov, aspect }: ThreeGPUPathTracerViewerProps, ref) => {
 //const ThreeGPUPathTracerViewer = ({src, style, projection, view, fov, aspect}: ThreeGPUPathTracerViewerProps) => {
-    const canvasRef = React.useRef<HTMLCanvasElement>(undefined)
+    const canvasRef = React.useRef<HTMLCanvasElement>(null)
     const rendererRef = React.useRef<THREE.WebGLRenderer>(null)
     const rendererPtRef = React.useRef<WebGLPathTracer>(null)
     const cameraRef = React.useRef<THREE.PerspectiveCamera>(null)
     const sceneRef = React.useRef<THREE.Scene>(null)
+    const animationIdRef = React.useRef<number>(0);
 
     React.useEffect(() => {
       const init = async () => {
@@ -57,7 +59,7 @@ const ThreeGPUPathTracerViewer = React.forwardRef<ViewerRef, ThreeGPUPathTracerV
 
         // Load GLTF Model
         const gltfLoader = new GLTFLoader();
-        const gltf = await gltfLoader.loadAsync(src);
+        const gltf = await gltfLoader.loadAsync(src ? src : "");
         const model = gltf.scene;
         scene.add(model);
         const boundingBox = new THREE.Box3();
@@ -76,7 +78,7 @@ const ThreeGPUPathTracerViewer = React.forwardRef<ViewerRef, ThreeGPUPathTracerV
         const renderer = new THREE.WebGLRenderer({ 
           antialias: true, 
           alpha: false,
-          canvas: canvasRef.current
+          canvas: canvasRef.current as HTMLCanvasElement
         });
         
         renderer.setSize(canvas.clientWidth, canvas.clientHeight);
@@ -100,20 +102,24 @@ const ThreeGPUPathTracerViewer = React.forwardRef<ViewerRef, ThreeGPUPathTracerV
         controls.update();
 
         const animate = () => {
-          requestAnimationFrame( animate );
+          const id = requestAnimationFrame( animate );
+          animationIdRef.current = id;
           pathTracer.renderSample();
           controls.update();
           //renderer.render(scene, camera);
         };
         animate();
-
-        const handleResize = () => {
-          const canvas = canvasRef.current;
-          renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-        }
-        window.addEventListener('resize', handleResize)
       };
       init();
+      return () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (rendererPtRef.current) (rendererPtRef.current as any)._pathTracer.dispose();
+        if (rendererRef.current) rendererRef.current.dispose();
+        if (sceneRef.current) {
+          if(sceneRef.current.environment) 
+            sceneRef.current.environment.dispose()
+        }
+      }
     }, []);
 
     React.useEffect(() => {
@@ -122,7 +128,7 @@ const ThreeGPUPathTracerViewer = React.forwardRef<ViewerRef, ThreeGPUPathTracerV
       if (!camera) return;
       if (!pathTracer) return;
       
-      const radiansToDegrees = (radians) => {
+      const radiansToDegrees = (radians: number) => {
         return radians * (180 / Math.PI);
       }
 
@@ -146,7 +152,6 @@ const ThreeGPUPathTracerViewer = React.forwardRef<ViewerRef, ThreeGPUPathTracerV
         const canvas = canvasRef.current;
         const renderer = rendererRef.current;
         if (!canvas || !renderer) return;
-        console.log("THREE JS RESIZE PATH TRACER")
         renderer.setSize(canvas.clientWidth, canvas.clientHeight);
       },
     }));
@@ -159,4 +164,5 @@ const ThreeGPUPathTracerViewer = React.forwardRef<ViewerRef, ThreeGPUPathTracerV
     );
 });
 
+ThreeGPUPathTracerViewer.displayName = 'ThreeGPUPathTracerViewer';
 export default ThreeGPUPathTracerViewer;

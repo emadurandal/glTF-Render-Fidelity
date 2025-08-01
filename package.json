@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "preinstall": "cd ./glTF-Sample-Renderer && npm install && npm run build",
+    "postinstall": "cp ./glTF-Sample-Renderer/dist/libs/*.wasm ./glTF-Sample-Renderer/dist/ && cp ./glTF-Sample-Renderer/dist/libs/* ./public/libs/",
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",

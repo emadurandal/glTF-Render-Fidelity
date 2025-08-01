@@ -4,7 +4,7 @@ import React from 'react'
 import { mat4, vec3 } from "gl-matrix";
 import Script from "next/script";
 import { glMatrix } from 'gl-matrix';
-import { ViewerRef, BoundingBox } from '@/components/Viewers/ViewerRef';
+import { ViewerRef, BoundingBox} from '@/types/ViewerRef';
 
 export type SampleViewerProps = {
   src?: string,
@@ -17,11 +17,12 @@ export type SampleViewerProps = {
   finishedLoading: () => void,
 }
 
-function jsToGl(array) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function jsToGl(array: any) {
     if (array === undefined) {
-        return undefined;
+        return [0, 0, 0];
     }
-    let tensor = new glMatrix.ARRAY_TYPE(array.length);
+    const tensor = new glMatrix.ARRAY_TYPE(array.length);
 
     for (let i = 0; i < array.length; ++i) {
         tensor[i] = array[i];
@@ -30,18 +31,40 @@ function jsToGl(array) {
     return tensor;
 }
 
-function getExtentsFromAccessor(accessor, worldTransform, outMin, outMax)
+
+// dequantize can be used to perform the normalization from WebGL2 vertexAttribPointer explicitly
+// https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Khronos/KHR_mesh_quantization/README.md#encoding-quantized-data
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function dequantize(typedArray: any, componentType: any)
+{
+    switch (componentType)
+    {
+    case 5120 /* GL.BYTE */:
+        return new Float32Array(typedArray).map(c => Math.max(c / 127.0, -1.0));
+    case 5121 /* GL.UNSIGNED_BYTE */:
+        return new Float32Array(typedArray).map(c => c / 255.0);
+    case 5122 /* GL.SHORT */:
+        return new Float32Array(typedArray).map(c => Math.max(c / 32767.0, -1.0));
+    case 5123 /* GL.UNSIGNED_SHORT */:
+        return new Float32Array(typedArray).map(c => c / 65535.0);
+    default:
+        return typedArray;
+    }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getExtentsFromAccessor(accessor: any, worldTransform: any, outMin: any, outMax: any)
 {
     let min = jsToGl(accessor.min);
     let max = jsToGl(accessor.max);
     
     if (accessor.normalized) {
-        min = gltfAccessor.dequantize(min, accessor.componentType);
-        max = gltfAccessor.dequantize(max, accessor.componentType);
+        min = dequantize(min, accessor.componentType);
+        max = dequantize(max, accessor.componentType);
     }
 
     // Construct all eight corners from min and max values
-    let boxVertices = [
+    const boxVertices = [
         vec3.fromValues(min[0], min[1], min[2]),
         vec3.fromValues(min[0], min[1], max[2]),
         vec3.fromValues(min[0], max[1], min[2]),
@@ -54,7 +77,7 @@ function getExtentsFromAccessor(accessor, worldTransform, outMin, outMax)
 
 
     // Transform all bounding box vertices
-    for(let i in boxVertices) { 
+    for(const i in boxVertices) { 
         vec3.transformMat4(boxVertices[i], boxVertices[i], worldTransform); 
     }
 
@@ -62,7 +85,7 @@ function getExtentsFromAccessor(accessor, worldTransform, outMin, outMax)
     const boxMin = vec3.clone(boxVertices[0]); // initialize
     const boxMax = vec3.clone(boxVertices[0]);
 
-    for(let i in boxVertices) {
+    for(const i in boxVertices) {
         for (const component of [0, 1, 2]) {
             boxMin[component] = Math.min(boxMin[component], boxVertices[i][component]);
             boxMax[component] = Math.max(boxMax[component], boxVertices[i][component]);
@@ -87,7 +110,8 @@ function getExtentsFromAccessor(accessor, worldTransform, outMin, outMax)
     }
 }
 
-function getSceneExtents(gltf, sceneIndex, outMin, outMax)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getSceneExtents(gltf: any, sceneIndex: any, outMin: any, outMax: any)
 {
     for (const i of [0, 1, 2])
     {
@@ -116,7 +140,8 @@ function getSceneExtents(gltf, sceneIndex, outMin, outMax)
 
         for (const primitive of mesh.primitives)
         {
-            const attribute = primitive.glAttributes.find(a => a.attribute == "POSITION");
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const attribute = primitive.glAttributes.find((a:any) => a.attribute == "POSITION");
             if (attribute === undefined)
             {
                 continue;
@@ -139,11 +164,12 @@ function getSceneExtents(gltf, sceneIndex, outMin, outMax)
 const SampleViewer = React.forwardRef<ViewerRef, SampleViewerProps>(({ src, style, projection, view, fov, aspect, setBBox, finishedLoading }: SampleViewerProps, ref) => {
 //const SampleViewer = ({src, style, projection, view, fov, aspect}: SampleViewerProps) => {
     const canvasRef = React.useRef<HTMLCanvasElement>(null)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rendererRef = React.useRef<any>(null)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const stateRef = React.useRef<any>(null)
-    const engineRef = React.useRef(null)
-    const cameraRef = React.useRef<UserCamera>(null)
-    const sceneRef = React.useRef(null)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cameraRef = React.useRef<any>(null)
 
     const [ktxLoaded, setKTXLoaded] = React.useState(false);
     const [dracoLoaded, setDracoLoaded] = React.useState(false);
@@ -178,7 +204,7 @@ const SampleViewer = React.forwardRef<ViewerRef, SampleViewerProps>(({ src, styl
         canvas.height = canvas.clientHeight;
 
         const resourceLoader = gltfView.createResourceLoader();
-        state.gltf = await resourceLoader.loadGltf(src);
+        state.gltf = await resourceLoader.loadGltf(src ? src : "");
 
         resourceLoader.loadEnvironment("/assets/chinese_garden_1k.hdr", {
           lut_ggx_file: "/assets/lut_ggx.png",
@@ -293,4 +319,5 @@ const SampleViewer = React.forwardRef<ViewerRef, SampleViewerProps>(({ src, styl
     );
 });
 
+SampleViewer.displayName = 'SampleViewer';
 export default SampleViewer;

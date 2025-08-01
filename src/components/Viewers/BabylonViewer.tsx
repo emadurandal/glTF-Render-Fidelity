@@ -3,8 +3,8 @@
 import React from 'react'
 import { mat4, quat, vec3 } from "gl-matrix";
 import { registerBuiltInLoaders } from "@babylonjs/loaders/dynamic";
-import { EquiRectangularCubeTexture, Logger, BaseTexture, PBRMaterial, CubeTexture, NullLoadingScreen, HDRCubeTexture, Engine, Matrix, Scene, Camera, LoadSceneAsync, FreeCamera, ArcRotateCamera, Vector3, HemisphericLight, DirectionalLight, Color3, Color4, AppendSceneAsync, Nullable } from '@babylonjs/core'
-import { ViewerRef, BoundingBox } from '@/components/Viewers/ViewerRef';
+import { Logger, BaseTexture, PBRMaterial, HDRCubeTexture, Engine, Matrix, Scene, Camera, LoadSceneAsync, FreeCamera, ArcRotateCamera, Vector3, HemisphericLight, DirectionalLight, Color3, Color4, AppendSceneAsync, Nullable } from '@babylonjs/core'
+import { ViewerRef, BoundingBox} from '@/types/ViewerRef';
 
 export type BabylonViewerProps = {
   src?: string,
@@ -23,7 +23,7 @@ const BabylonViewer = React.forwardRef<ViewerRef, BabylonViewerProps>(({ src, st
   const cameraRef = React.useRef<Camera | null>(null)
   const sceneRef = React.useRef<Scene | null>(null)
 
-  const getSceneBoundingBox = (scene) => {
+  const getSceneBoundingBox = (scene: Scene) => {
     let min = new Vector3(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY);
     let max = new Vector3(Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY);
 
@@ -44,7 +44,7 @@ const BabylonViewer = React.forwardRef<ViewerRef, BabylonViewerProps>(({ src, st
     return { min, max };
   }
 
-  const getGeometricCenter = (scene) => {
+  const getGeometricCenter = (scene: Scene) => {
     const meshes = scene.meshes.filter(mesh => mesh.isVisible && mesh.getTotalVertices() > 0);
 
     if (meshes.length === 0) {
@@ -67,7 +67,7 @@ const BabylonViewer = React.forwardRef<ViewerRef, BabylonViewerProps>(({ src, st
 
     registerBuiltInLoaders();
 
-    Logger.LogLevels = Logger.None;
+    Logger.LogLevels = Logger.NoneLogLevel;
 
     const engine = new Engine(canvasRef.current, false)
     engine.canvasTabIndex = -1;
@@ -80,6 +80,7 @@ const BabylonViewer = React.forwardRef<ViewerRef, BabylonViewerProps>(({ src, st
       hideLoadingUI: function () {
           // Do nothing
       },
+      loadingUIText: "",
       loadingUIBackgroundColor: "#000000" // Provide any default, even if unused
     };
     engineRef.current = engine
@@ -87,7 +88,7 @@ const BabylonViewer = React.forwardRef<ViewerRef, BabylonViewerProps>(({ src, st
     const scene = new Scene(engine);
     scene.useRightHandedSystem = true;
 
-    AppendSceneAsync(src, scene).then(async () => {
+    AppendSceneAsync(src ? src : "", scene).then(async () => {
       sceneRef.current = scene
 
       // Use a FreeCamera (which accepts matrix overrides)
@@ -100,8 +101,8 @@ const BabylonViewer = React.forwardRef<ViewerRef, BabylonViewerProps>(({ src, st
       const canvas = canvasRef.current;
 
       const geom_center = getGeometricCenter(scene);
-      const luda = getSceneBoundingBox(scene);
-      let minmax = scene.getWorldExtends();
+      const bbox = getSceneBoundingBox(scene);
+      const minmax = scene.getWorldExtends();
 
       scene.meshes.forEach(mesh => {
         const mat = mesh.material;
@@ -115,23 +116,12 @@ const BabylonViewer = React.forwardRef<ViewerRef, BabylonViewerProps>(({ src, st
       scene.imageProcessingConfiguration.exposure = 1.5;
       scene.imageProcessingConfiguration.contrast = 1.2;
 
-      // Create lights
-      //const hemisphericLight = new HemisphericLight('light', new Vector3(0, 1, 0), scene)
-      //hemisphericLight.intensity = 0.7
-
-      //const directionalLight = new DirectionalLight('dirLight', new Vector3(-1, -1, -1), scene)
-      //directionalLight.intensity = 0.5
-
       // Every frame: submit matrices to Babylon
       scene.registerBeforeRender(() => {
           
-        //const viewBabylon = Matrix.FromArray(camera_arc.getViewMatrix());
-        // Convert glMatrix view matrix to Babylon's Matrix
         const viewBabylon = Matrix.FromArray(view);
         const projBabylon = Matrix.FromArray(projection);
 
-        //setProjection(projection);
-        //setView(camera_arc.getViewMatrix());
         const extractPositionFromViewMatrix = (view: Matrix): Vector3 => {
             // Inverse view matrix gives the camera world matrix
             const inv = new Matrix();
@@ -148,15 +138,18 @@ const BabylonViewer = React.forwardRef<ViewerRef, BabylonViewerProps>(({ src, st
         } // Override view matrix
         camera.getTransformationMatrix=  () => viewBabylon.clone()
         camera._position = extractPositionFromViewMatrix(viewBabylon);
-        camera._globalPosition = extractPositionFromViewMatrix(viewBabylon);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (camera as any)._globalPosition = extractPositionFromViewMatrix(viewBabylon);
         //camera._refreshFrustumPlanes();
         //scene.setTransformMatrix(viewBabylon, projBabylon)
       });
 
       // Render loop
-      engine.runRenderLoop(() => {
-        scene.render()
-      })
+      //engine.runRenderLoop(() => {
+        //scene.render()
+      //})
+      engine.stopRenderLoop();
+      scene.render()
 
       // Handle resize
       /*const handleResize = () => {
@@ -172,7 +165,7 @@ const BabylonViewer = React.forwardRef<ViewerRef, BabylonViewerProps>(({ src, st
       });*/
 
       const envMapUrl = "../env_maps/chinese_garden_1k.hdr";
-      const loadHDRAsync = async (url: any, scene: Scene): Promise<Nullable<BaseTexture>> => {
+      const loadHDRAsync = async (url: string, scene: Scene): Promise<Nullable<BaseTexture>> => {
         return new Promise((resolve) => {
           const hdr = new HDRCubeTexture(url, scene, 512, false, true, false, true);
           hdr.onLoadObservable.addOnce(() => resolve(hdr));
@@ -180,15 +173,26 @@ const BabylonViewer = React.forwardRef<ViewerRef, BabylonViewerProps>(({ src, st
       }
 
       const reflectionTexture = await loadHDRAsync(envMapUrl, scene);
-
+      if (!reflectionTexture) {
+        finishedLoading();
+        return () => {
+          //window.removeEventListener('resize', handleResize)
+          engine.dispose()
+        }
+      }
       // Apply as environment and background
       scene.environmentTexture = reflectionTexture;
       const envMapRotationY = Math.PI / 2;
-      scene.environmentTexture.setReflectionTextureMatrix(Matrix.RotationY(envMapRotationY));
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (scene.environmentTexture as any).setReflectionTextureMatrix(Matrix.RotationY(envMapRotationY));
+
       const skybox = scene.createDefaultSkybox(reflectionTexture, true, 1000);
       // Rotate the skybox texture
-      if (skybox && skybox.material && skybox.material.reflectionTexture) {
-        skybox.material.reflectionTexture.rotationY = envMapRotationY; // Rotate 90 degrees
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (skybox && skybox.material && (skybox.material as any).reflectionTexture) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (skybox.material as any).reflectionTexture.rotationY = envMapRotationY; // Rotate 90 degrees
       }
 
       // Observe the canvas
@@ -237,10 +241,12 @@ const BabylonViewer = React.forwardRef<ViewerRef, BabylonViewerProps>(({ src, st
       } // Override view matrix
       camera.getTransformationMatrix=  () => viewBabylon.clone()
       camera._position = extractPositionFromViewMatrix(viewBabylon);
-      camera._globalPosition = extractPositionFromViewMatrix(viewBabylon);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (camera as any)._globalPosition = extractPositionFromViewMatrix(viewBabylon);
       //camera._refreshFrustumPlanes();
       //scene.setTransformMatrix(viewBabylon, projBabylon)
     });
+    scene.render();
   }, [projection, view, aspect, fov]);
 
   React.useImperativeHandle(ref, () => ({
@@ -248,8 +254,10 @@ const BabylonViewer = React.forwardRef<ViewerRef, BabylonViewerProps>(({ src, st
     resize: (width: number, height: number) => {
       const canvas = canvasRef.current;
       const engine = engineRef.current;
-      if (!canvas || !engine) return;
+      const scene = sceneRef.current;
+      if (!canvas || !engine || !scene) return;
       engine.resize();
+      scene.render();
     },
   }));
 

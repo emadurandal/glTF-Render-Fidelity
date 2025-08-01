@@ -54,16 +54,16 @@ export default function ComparePage({name, label, renderViews, description, down
   const getPreferredVariant = (
       variants: { [key: string]: string }
     ): [string, string] | undefined => {
-      if ("glTF" in variants) {
-        return ["glTF", variants["glTF"]];
-      }
+    if ("glTF" in variants) {
+      return ["glTF", variants["glTF"]];
+    }
 
     const firstEntry = Object.entries(variants)[0];
     return firstEntry;
   }
   const variant3D = getPreferredVariant(variants);
   //const src3D = downloadUrl ? downloadUrl : srcRoot + "/" + name + "/" + variant3D[0] + "/" + variant3D[1];
-  const src3D = srcRoot + "/" + name + "/" + variant3D[0] + "/" + variant3D[1];
+  const src3D = variant3D ? srcRoot + "/" + name + "/" + variant3D[0] + "/" + variant3D[1] : "";
 
   const toggleDiv = () => {
     setIsVisible(!isVisible);
