@@ -47,7 +47,7 @@ export default function ComparePage({name, label, renderViews, description, down
   const [rtEngine1, setRtEngine1] = React.useState('gltf-sample-viewer');
   const [rtEngine2, setRtEngine2] = React.useState('model-viewer');
   const [nextEngine, setNextEngine] = React.useState(0);
-  const [comparisonMode, setComparisonMode] = React.useState(3);
+  const [comparisonMode, setComparisonMode] = React.useState(0);
   const [shareSnackbarOpen, setShareSnackbarOpen] = React.useState(false);
   const zoomOffsetRef = React.useRef<HTMLDivElement>(null);
   const srcRoot = "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/refs/heads/main/Models"
