@@ -207,10 +207,10 @@ const SampleViewer = React.forwardRef<ViewerRef, SampleViewerProps>(({ src, styl
         const resourceLoader = gltfView.createResourceLoader();
         state.gltf = await resourceLoader.loadGltf(src ? src : "");
 
-        resourceLoader.loadEnvironment("/assets/chinese_garden_1k.hdr", {
-          lut_ggx_file: "/assets/lut_ggx.png",
-          lut_charlie_file: "/assets/lut_charlie.png",
-          lut_sheen_E_file: "/assets/lut_sheen_E.png"
+        resourceLoader.loadEnvironment(`${basePath}/assets/chinese_garden_1k.hdr`, {
+          lut_ggx_file: `${basePath}/assets/lut_ggx.png`,
+          lut_charlie_file: `${basePath}/assets/lut_charlie.png`,
+          lut_sheen_E_file: `${basePath}/assets/lut_sheen_E.png`
         }).then((environment) => {
           console.log("environment", environment);
           state.environment = environment;
