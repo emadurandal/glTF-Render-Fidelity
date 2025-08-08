@@ -224,7 +224,8 @@ const SampleViewer = React.forwardRef<ViewerRef, SampleViewerProps>(({ src, styl
         scene.applyTransformHierarchy(state.gltf);
         state.userCamera.perspective.aspectRatio = canvas.clientWidth / canvas.clientHeight;
         state.userCamera.resetView(state.gltf, state.sceneIndex);
-        
+        state.userCamera.perspective.zfar = 1000.0;
+        state.userCamera.perspective.znear = 0.01;
         const extents = {min: new Float32Array(3), max: new Float32Array(3)};
 
         getSceneExtents(state.gltf, state.sceneIndex, extents.min, extents.max);
@@ -246,7 +247,8 @@ const SampleViewer = React.forwardRef<ViewerRef, SampleViewerProps>(({ src, styl
          
           //state.userCamera.resetView(state.gltf, state.sceneIndex);
           //state.userCamera.fitViewToScene(state.gltf, state.sceneIndex);
-        
+          state.userCamera.perspective.zfar = 1000.0;
+          state.userCamera.perspective.znear = 0.01;
           //console.log("canvas.clientWidth, canvas.clientHeight", canvas.clientWidth, canvas.clientHeight)
           gltfView.renderFrame(state, canvas.clientWidth, canvas.clientHeight);
           window.requestAnimationFrame(update);
