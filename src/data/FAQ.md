@@ -29,5 +29,5 @@
 
 **Q: What is the purpose of the Slider 3D comparison tool?**
 
-**A:** This is an experimental tool that allows slider-based side-by-side comparison of real-time renderers that can run on the Web. It is currently in experimental mode as proper defaults are being consolidated for each individual viewer. <br><br>
+**A:** It is an experimental tool that allows slider-based side-by-side comparison of real-time renderers that can run on the Web. It is currently in experimental mode as proper defaults are being consolidated for each individual viewer. <br><br>
 
