@@ -38,7 +38,7 @@ const ThreeGPUPathTracerViewer = React.forwardRef<ViewerRef, ThreeGPUPathTracerV
         scene.background = new THREE.Color(0xffffffff);
 
         // Set up camera
-        const camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
+        const camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.01, 1000);
         cameraRef.current = camera;
         camera.matrixAutoUpdate = false;
 
