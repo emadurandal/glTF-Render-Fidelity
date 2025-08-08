@@ -30,6 +30,7 @@ class ArcballCamera {
   // === Camera orbit state ===
   target: THREE.Vector3 = new THREE.Vector3(0, 0, 0); // Point to orbit around
   radius: number = 5;
+  global_radius: number = 5;
   theta: number = 0;
   phi: number = Math.PI / 2;
   zoom_speed: number = 0.1;
@@ -115,7 +116,7 @@ class ArcballCamera {
     this.radius += event.deltaY * this.zoom_speed;
 
     // Clamp to prevent flipping or going too close
-    this.radius = Math.max(0.1, Math.min(100.0, this.radius));
+    this.radius = Math.max(this.global_radius * 0.1, Math.min(100.0, this.radius));
 
     this.updateCameraPosition();
   }
@@ -154,6 +155,7 @@ class ArcballCamera {
   // Set pivot dynamically
   setRadius(newRadius: number) {
     this.radius = newRadius;
+    this.global_radius = newRadius;
   }
 
   // Set pivot dynamically
