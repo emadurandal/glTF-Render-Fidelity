@@ -90,7 +90,11 @@ class ArcballCamera {
     const y = this.radius * Math.cos(this.phi);
     const z = this.radius * Math.sin(this.phi) * Math.cos(this.theta);
 
-    this.threeCamera.position.set(x, y, z);
+    this.threeCamera.position.set(
+        this.target.x + x,
+        this.target.y + y,
+        this.target.z + z
+    );
     this.threeCamera.lookAt(this.target);
 
     // If you're sending matrices elsewhere:
