@@ -218,6 +218,7 @@ const SampleViewer = React.forwardRef<ViewerRef, SampleViewerProps>(({ src, styl
           state.renderingParameters.blurEnvironmentMap = false;
           state.renderingParameters.environmentRotation = 0;
         })
+        state.renderingParameters.toneMap = GltfState.ToneMaps.ACES_HILL_EXPOSURE_BOOST;
 
         const scene = state.gltf.scenes[state.sceneIndex];
         rendererRef.current = gltfView.renderer;

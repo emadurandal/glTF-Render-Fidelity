@@ -3,7 +3,7 @@
 import React from 'react'
 import { mat4, quat, vec3 } from "gl-matrix";
 import { registerBuiltInLoaders } from "@babylonjs/loaders/dynamic";
-import { Logger, BaseTexture, PBRMaterial, HDRCubeTexture, Engine, Matrix, Scene, Camera, LoadSceneAsync, FreeCamera, ArcRotateCamera, Vector3, HemisphericLight, DirectionalLight, Color3, Color4, AppendSceneAsync, Nullable } from '@babylonjs/core'
+import { Logger, BaseTexture, Constants, Material, PBRMaterial, ImageProcessingConfiguration, HDRCubeTexture, Engine, Matrix, Scene, Camera, LoadSceneAsync, FreeCamera, ArcRotateCamera, Vector3, HemisphericLight, DirectionalLight, Color3, Color4, AppendSceneAsync, Nullable } from '@babylonjs/core'
 import { ViewerRef, BoundingBox} from '@/types/ViewerRef';
 
 export type BabylonViewerProps = {
@@ -115,11 +115,12 @@ const BabylonViewer = React.forwardRef<ViewerRef, BabylonViewerProps>(({ src, st
       const envMapUrl = "../env_maps/chinese_garden_1k.hdr";
       const loadHDRAsync = async (url: string, scene: Scene): Promise<Nullable<BaseTexture>> => {
         return new Promise((resolve) => {
-          const hdr = new HDRCubeTexture(url, scene, 512, false, true, false, true);
+          const hdr = new HDRCubeTexture(url, scene, 256, false, true, false, true);
           hdr.onLoadObservable.addOnce(() => resolve(hdr));
         });
       }
-      const reflectionTexture = await loadHDRAsync(envMapUrl, scene);
+      //const reflectionTexture = await loadHDRAsync(envMapUrl, scene);
+      const reflectionTexture = new HDRCubeTexture(envMapUrl, scene, 256, false, true, false, true);
       if (!reflectionTexture) {
         return () => {
           //window.removeEventListener('resize', handleResize)
@@ -144,7 +145,9 @@ const BabylonViewer = React.forwardRef<ViewerRef, BabylonViewerProps>(({ src, st
       // Optional: adjust exposure and contrast
       //scene.imageProcessingConfiguration.exposure = 1.5;
       //scene.imageProcessingConfiguration.contrast = 1.2;
-
+      scene.imageProcessingConfiguration.toneMappingEnabled = true;
+      scene.imageProcessingConfiguration.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
+      scene.imageProcessingConfiguration.exposure = 1 / 0.6;
       // Every frame: submit matrices to Babylon
  
 
@@ -155,6 +158,12 @@ const BabylonViewer = React.forwardRef<ViewerRef, BabylonViewerProps>(({ src, st
       engine.runRenderLoop(() => {
         scene.render()
       })
+
+        scene.materials.forEach((material: Material) => {
+          (material as PBRMaterial).realTimeFiltering = true;
+          (material as PBRMaterial).realTimeFilteringQuality =
+              Constants.TEXTURE_FILTERING_QUALITY_HIGH;
+        });
 
       // Observe the canvas
       //resizeObserver.observe(containerRootRef.current);

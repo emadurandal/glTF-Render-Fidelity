@@ -88,6 +88,8 @@ const ThreeGPUPathTracerViewer = React.forwardRef<ViewerRef, ThreeGPUPathTracerV
         // path tracer
         const pathTracer = new WebGLPathTracer( renderer );
         pathTracer.filterGlossyFactor = 0.5;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (pathTracer as any).alpha = true;
         //pathTracer.renderScale = renderScale;
         //pathTracer.tiles.set( tiles, tiles );
         //pathTracer.setBVHWorker( new ParallelMeshBVHWorker() );
