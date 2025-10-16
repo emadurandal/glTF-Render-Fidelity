@@ -94,6 +94,8 @@ const ImageComparison2 = ({imgSrc1, imgSrc2, sliderPosition, setSliderPosition}:
         //width = maxHeight * aspectRatio;
       }
 
+      console.log("width, height", width, height);
+
       containerRef.current.style.width = width+"px";
       containerRef.current.style.height = height+"px";
 

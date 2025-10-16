@@ -26,3 +26,8 @@
 **Q: Can I put my own engine in The Render Fidelity Website?**
 
 **A:** Go to [Contribute](https://github.khronos.org/glTF-Render-Fidelity/contribute) page. <br><br>
+
+**Q: What is the purpose of the Slider 3D comparison tool?**
+
+**A:** It is an experimental tool that allows slider-based side-by-side comparison of real-time renderers that can run on the Web. It is currently in experimental mode as proper defaults are being consolidated for each individual viewer. <br><br>
+
